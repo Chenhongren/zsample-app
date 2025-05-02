@@ -1,0 +1,38 @@
+From 9bb117580a0185875b60dcbd80d807d46c3babd6 Mon Sep 17 00:00:00 2001
+From: Ren Chen <Ren.Chen@ite.com.tw>
+Date: Thu, 23 Jan 2025 15:34:59 +0800
+Subject: [PATCH 3/3] drivers: i3c: shell: enable i3c shell support for
+ it51xxx.
+
+This commit introduces support for i3c shell on it51xxx.
+
+Signed-off-by: Ren Chen <Ren.Chen@ite.com.tw>
+---
+ drivers/i3c/i3c_shell.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/i3c/i3c_shell.c b/drivers/i3c/i3c_shell.c
+index 7a37919016c..bc4e94ef7ce 100644
+--- a/drivers/i3c/i3c_shell.c
++++ b/drivers/i3c/i3c_shell.c
+@@ -82,6 +82,8 @@ struct i3c_ctrl {
+ 
+ /* zephyr-keep-sorted-start */
+ DT_FOREACH_STATUS_OKAY(cdns_i3c, I3C_CTRL_FN)
++DT_FOREACH_STATUS_OKAY(ite_it51xxx_i3cm, I3C_CTRL_FN)
++DT_FOREACH_STATUS_OKAY(ite_it51xxx_i3cs, I3C_CTRL_FN)
+ DT_FOREACH_STATUS_OKAY(nuvoton_npcx_i3c, I3C_CTRL_FN)
+ DT_FOREACH_STATUS_OKAY(nxp_mcux_i3c, I3C_CTRL_FN)
+ DT_FOREACH_STATUS_OKAY(snps_designware_i3c, I3C_CTRL_FN)
+@@ -99,6 +101,8 @@ DT_FOREACH_STATUS_OKAY(st_stm32_i3c, I3C_CTRL_FN)
+ const struct i3c_ctrl i3c_list[] = {
+ 	/* zephyr-keep-sorted-start */
+ 	DT_FOREACH_STATUS_OKAY(cdns_i3c, I3C_CTRL_LIST_ENTRY)
++	DT_FOREACH_STATUS_OKAY(ite_it51xxx_i3cm, I3C_CTRL_LIST_ENTRY)
++	DT_FOREACH_STATUS_OKAY(ite_it51xxx_i3cs, I3C_CTRL_LIST_ENTRY)
+ 	DT_FOREACH_STATUS_OKAY(nuvoton_npcx_i3c, I3C_CTRL_LIST_ENTRY)
+ 	DT_FOREACH_STATUS_OKAY(nxp_mcux_i3c, I3C_CTRL_LIST_ENTRY)
+ 	DT_FOREACH_STATUS_OKAY(snps_designware_i3c, I3C_CTRL_LIST_ENTRY)
+-- 
+2.34.1
+

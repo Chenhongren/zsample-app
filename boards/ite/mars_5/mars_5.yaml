@@ -1,0 +1,18 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+identifier: mars_5
+name: Mars 5 Board
+type: mcu
+arch: riscv
+toolchain:
+  - zephyr
+ram: 128
+supported:
+  - flash
+  - gpio
+  - i2c
+  - pinctrl
+  - pm
+  - uart
+vendor: ite

@@ -1,0 +1,21 @@
+# This file is provided so that the application can be compiled using Twister,
+# the Zephyr testing tool. In this file, multiple combinations can be specified,
+# so that you can easily test all of them locally or in CI.
+sample:
+  description: i3c sample application
+  name: i3c-sample-application
+common:
+  build_only: true
+tests:
+  sample.mars_5.i3cs:
+    integration_platforms:
+      - mars_5
+    extra_args:
+      - CONF_FILE="boards/mars_5/i3cs.conf"
+      - EXTRA_DTC_OVERLAY_FILE="boards/mars_5/i3cs.overlay"
+  sample.mars_5.i3cm:
+    integration_platforms:
+      - mars_5
+    extra_args:
+      - CONF_FILE="boards/mars_5/i3cm.conf"
+      - EXTRA_DTC_OVERLAY_FILE="boards/mars_5/i3cm.overlay"

@@ -1,0 +1,22 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config ITE_I3C_SAMPLE
+	bool "ITE I3C sample"
+	depends on DT_HAS_ITE_IT51XXX_I3CM_ENABLED || DT_HAS_ITE_IT51XXX_I3CS_ENABLED
+	default y
+	help
+	  Enable the ite i3c sample driver, including tgt mqueue and ctrl dummy device.
+
+if ITE_I3C_SAMPLE
+
+config ITE_I3C_SAMPLE_INIT_PRIORITY
+	int "ITE I3C device drivers init priority"
+	default KERNEL_INIT_PRIORITY_DEVICE
+	help
+	  ITE I3C device drivers init priority.
+
+rsource "Kconfig.ctrl_dummy"
+rsource "Kconfig.tgt_mqueue"
+
+endif # ITE_I3C_SAMPLE
