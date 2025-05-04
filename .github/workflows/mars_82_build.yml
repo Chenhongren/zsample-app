@@ -66,3 +66,9 @@ jobs:
         shell: bash
         run: |
           west twister -T app -s sample.mars_82.base -v --inline-logs --integration $EXTRA_TWISTER_FLAGS
+
+      - name: Build Mars 82 SPI firmware
+        working-directory: sample-application
+        shell: bash
+        run: |
+          west twister -T app -s sample.mars_82.spi -v --inline-logs --integration $EXTRA_TWISTER_FLAGS
