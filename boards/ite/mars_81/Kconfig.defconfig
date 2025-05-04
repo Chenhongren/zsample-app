@@ -1,0 +1,20 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_MARS_81
+
+if PM
+
+config PM_DEVICE
+     default y
+
+choice PM_POLICY
+     default PM_POLICY_CUSTOM
+endchoice
+
+endif # PM
+
+config INPUT
+     default y if KSCAN
+
+endif # BOARD_MARS_81

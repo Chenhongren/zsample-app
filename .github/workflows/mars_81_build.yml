@@ -1,0 +1,68 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-13, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: sample-application
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      - name: Setup Zephyr project
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: sample-application
+          toolchains: riscv64-zephyr-elf
+
+      - name: Apply patches to Zephyr
+        run: |
+          PATCH_DIR="sample-application/zpatch"
+          TARGET_REPO="zephyr/"
+
+          # Remove trailing slashes
+          PATCH_DIR="${PATCH_DIR%/}"
+          TARGET_REPO="${TARGET_REPO%/}"
+
+          if [[ ! -d "$PATCH_DIR" ]]; then
+            echo "Error: Patch directory '$PATCH_DIR' does not exist."
+            exit 1
+          fi
+
+          if [[ ! -d "$TARGET_REPO" ]]; then
+            echo "Error: Target repo '$TARGET_REPO' does not exist."
+            exit 1
+          fi
+
+          shopt -s nullglob
+          patch_files=("$PATCH_DIR"/*.patch)
+
+          if [[ ${#patch_files[@]} -eq 0 ]]; then
+            echo "No patch files found in $PATCH_DIR."
+          else
+            for patch in "${patch_files[@]}"; do
+              echo "Applying patch: $patch to $TARGET_REPO"
+              patch -d "$TARGET_REPO" -p1 < "$patch"
+            done
+          fi
+
+      - name: Build Mars 81 Base firmware
+        working-directory: sample-application
+        shell: bash
+        run: |
+          west twister -T app -s sample.mars_81.base -v --inline-logs --integration $EXTRA_TWISTER_FLAGS

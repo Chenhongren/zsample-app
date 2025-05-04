@@ -2,10 +2,12 @@
 # the Zephyr testing tool. In this file, multiple combinations can be specified,
 # so that you can easily test all of them locally or in CI.
 sample:
-  description: i3c sample application
-  name: i3c-sample-application
+  description: sample application
+  name: sample-application
+
 common:
   build_only: true
+
 tests:
   sample.mars_5.i3cs:
     integration_platforms:
@@ -13,9 +15,17 @@ tests:
     extra_args:
       - CONF_FILE="boards/mars_5/i3cs.conf"
       - EXTRA_DTC_OVERLAY_FILE="boards/mars_5/i3cs.overlay"
+
   sample.mars_5.i3cm:
     integration_platforms:
       - mars_5
     extra_args:
       - CONF_FILE="boards/mars_5/i3cm.conf"
       - EXTRA_DTC_OVERLAY_FILE="boards/mars_5/i3cm.overlay"
+
+  sample.mars_81.base:
+    integration_platforms:
+      - mars_81
+    extra_args:
+      - CONF_FILE="boards/mars_81/base.conf"
+      - EXTRA_DTC_OVERLAY_FILE="boards/mars_81/base.overlay"
