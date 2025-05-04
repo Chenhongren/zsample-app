@@ -4,6 +4,7 @@
 |-------|-------------|
 Mars 5 | <img src="https://github.com/Chenhongren/zsample-app/actions/workflows/mars_5_build.yml/badge.svg?event=push">
 Mars 81 | <img src="https://github.com/Chenhongren/zsample-app/actions/workflows/mars_81_build.yml/badge.svg?event=push">
+Mars 82 | <img src="https://github.com/Chenhongren/zsample-app/actions/workflows/mars_82_build.yml/badge.svg?event=push">
 
 ## Getting Started
 

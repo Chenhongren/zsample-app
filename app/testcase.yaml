@@ -29,3 +29,10 @@ tests:
     extra_args:
       - CONF_FILE="boards/mars_81/base.conf"
       - EXTRA_DTC_OVERLAY_FILE="boards/mars_81/base.overlay"
+
+  sample.mars_82.base:
+    integration_platforms:
+      - mars_82
+    extra_args:
+      - CONF_FILE="boards/mars_82/base.conf"
+      - EXTRA_DTC_OVERLAY_FILE="boards/mars_82/base.overlay"

@@ -1,0 +1,27 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+identifier: mars_82
+name: Mars 82 Board
+type: mcu
+arch: riscv
+toolchain:
+  - zephyr
+ram: 256
+testing:
+  ignore_tags:
+    - net
+    - bluetooth
+supported:
+  - adc
+  - espi
+  - gpio
+  - usb_device
+  - i2c
+  - kscan
+  - pm
+  - pwm
+  - tach
+  - uart
+  - watchdog
+vendor: ite
