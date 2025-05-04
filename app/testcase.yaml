@@ -23,6 +23,13 @@ tests:
       - CONF_FILE="boards/mars_5/i3cm.conf"
       - EXTRA_DTC_OVERLAY_FILE="boards/mars_5/i3cm.overlay"
 
+  sample.mars_5.spi:
+    integration_platforms:
+      - mars_5
+    extra_args:
+      - CONF_FILE="boards/mars_5/spi.conf"
+      - EXTRA_DTC_OVERLAY_FILE="boards/mars_5/spi.overlay"
+
   sample.mars_81.base:
     integration_platforms:
       - mars_81
