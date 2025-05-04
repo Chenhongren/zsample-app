@@ -30,6 +30,13 @@ tests:
       - CONF_FILE="boards/mars_81/base.conf"
       - EXTRA_DTC_OVERLAY_FILE="boards/mars_81/base.overlay"
 
+  sample.mars_81.spi:
+    integration_platforms:
+      - mars_81
+    extra_args:
+      - CONF_FILE="boards/mars_81/spi.conf"
+      - EXTRA_DTC_OVERLAY_FILE="boards/mars_81/spi.overlay"
+
   sample.mars_82.base:
     integration_platforms:
       - mars_82
