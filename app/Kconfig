@@ -13,3 +13,13 @@ endmenu
 module = APP
 module-str = APP
 source "subsys/logging/Kconfig.template.log_config"
+
+config SPI_TEST
+	bool "SPI Test"
+	depends on SPI
+	help
+	  Enable SPI test.
+
+if SPI_TEST
+rsource "spi_test/Kconfig"
+endif # SPI_TEST

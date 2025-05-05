@@ -9,4 +9,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(app LANGUAGES C)
 
-target_sources(app PRIVATE src/main.c)
+target_sources(app PRIVATE main.c)
+
+target_sources_ifdef(CONFIG_SPI_TEST app PRIVATE spi_test/spi_test.c)
+zephyr_include_directories_ifdef(CONFIG_SPI_TEST spi_test)
