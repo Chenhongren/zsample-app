@@ -1,0 +1,103 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config SPI_TEST_CLOCK_SOURCE_KHZ
+	int "Set SPI Clock Source"
+	depends on SPI_TEST
+	default 24000 if BOARD_MARS_82 # SSPI freq
+	default 24000 if BOARD_MARS_81 # SSPI freq
+	default 48000 if BOARD_MARS_5 # PLL freq
+	help
+	  Set SPI clock source.
+
+config SPI_TEST_JEDEC_ID
+	bool "SPI Jedec ID Test"
+	depends on SPI_TEST
+	default y
+	help
+	  Enable SPI Jedec ID test.
+
+config SPI_TEST_FREQUENCY
+	bool "SPI Frequency Test"
+	depends on SPI_TEST
+	default y
+	help
+	  Enable SPI frequency test.
+
+config SPI_TEST_ASYNC_TRANSFER
+	bool "SPI Async Transfer Test"
+	depends on SPI_TEST
+	default y
+	help
+	  Enable SPI async transfer test.
+
+if SPI_TEST_ASYNC_TRANSFER
+config SPI_TEST_ASYNC_STACK_SIZE
+	int "Stack Size of SPI Async Transfer"
+	default 512
+	help
+	  Set the stack size of SPI async transfer.
+endif # SPI_TEST_ASYNC_TRANSFER
+
+config SPI_TEST_FLASH_ACCESS
+	bool "SPI Flash Access Test"
+	depends on SPI_TEST
+	default y
+	help
+	  Enable SPI flash access test.
+
+config SPI_TEST_DUAL_MODE
+	bool "SPI Dual Mode Test"
+	depends on SPI_TEST
+	default n if BOARD_MARS_5
+	default n if BOARD_MARS_81
+	default y
+	help
+	  Enable SPI dual mode test.
+
+config SPI_TEST_QUAD_MODE
+	bool "SPI Qual Mode Test"
+	depends on SPI_TEST
+	default n if BOARD_MARS_5
+	default n if BOARD_MARS_81
+	default y
+	help
+	  Enable SPI qual mode test.
+
+config SPI_TEST_LINE_MODE
+	bool "SPI Line Mode Test"
+	depends on SPI_TEST
+	default n if BOARD_MARS_82
+	default n if BOARD_MARS_81
+	default y
+	help
+	  Enable SPI line mode test.
+
+config SPI_TEST_RX_ONLY
+	bool "SPI RX Test"
+	depends on SPI_TEST
+	default y
+	help
+	  Enable SPI RX test.
+
+config SPI_TEST_TX_ONLY
+	bool "SPI TX Test"
+	depends on SPI_TEST
+	default y
+	help
+	  Enable SPI TX test.
+
+config SPI_TEST_PM_CHECK
+	bool "SPI PM Check Test"
+	depends on SPI_TEST
+	default y
+	help
+	  Enable SPI PM check test.
+
+if SPI_TEST_PM_CHECK
+config SPI_TEST_PM_CHECK_STACK_SIZE
+	int "Stack Size of SPI PM Check Thread"
+	default 1024
+	help
+	  Set the stack size of SPI PM check thread.
+endif # SPI_TEST_PM_CHECK
