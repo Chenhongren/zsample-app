@@ -1,4 +1,4 @@
-From 11f75dada146721752b151cb1e513c63e04041f0 Mon Sep 17 00:00:00 2001
+From 129f91bc0b1401be0779bdfe1690fba619bf2564 Mon Sep 17 00:00:00 2001
 From: Ren Chen <Ren.Chen@ite.com.tw>
 Date: Tue, 31 Dec 2024 11:16:43 +0800
 Subject: [PATCH 2/3] drivers: i3c: add it51xxx i3cm driver
@@ -11,10 +11,10 @@ Signed-off-by: Ren Chen <Ren.Chen@ite.com.tw>
 ---
  drivers/i3c/CMakeLists.txt             |    5 +
  drivers/i3c/Kconfig.it51xxx            |   25 +
- drivers/i3c/i3cm_it51xxx.c             | 1679 ++++++++++++++++++++++++
+ drivers/i3c/i3cm_it51xxx.c             | 1714 ++++++++++++++++++++++++
  dts/bindings/i3c/ite,it51xxx-i3cm.yaml |   78 ++
  dts/riscv/ite/it51xxx.dtsi             |   22 +
- 5 files changed, 1809 insertions(+)
+ 5 files changed, 1844 insertions(+)
  create mode 100644 drivers/i3c/i3cm_it51xxx.c
  create mode 100644 dts/bindings/i3c/ite,it51xxx-i3cm.yaml
 
@@ -72,10 +72,10 @@ index f21924de5f2..6ebded9837a 100644
  	depends on DT_HAS_ITE_IT51XXX_I3CS_ENABLED
 diff --git a/drivers/i3c/i3cm_it51xxx.c b/drivers/i3c/i3cm_it51xxx.c
 new file mode 100644
-index 00000000000..e54ea434e07
+index 00000000000..99d2ddaab10
 --- /dev/null
 +++ b/drivers/i3c/i3cm_it51xxx.c
-@@ -0,0 +1,1679 @@
+@@ -0,0 +1,1714 @@
 +/*
 + * Copyright (c) 2025 ITE Technology Inc.
 + *
@@ -85,7 +85,8 @@ index 00000000000..e54ea434e07
 +#define DT_DRV_COMPAT ite_it51xxx_i3cm
 +
 +#include <zephyr/logging/log.h>
-+LOG_MODULE_REGISTER(i3cm_it51xxx, CONFIG_I3C_IT51XXX_LOG_LEVEL);
++#include <zephyr/logging/log_instance.h>
++LOG_MODULE_REGISTER(i3cm_it51xxx);
 +
 +#include <zephyr/drivers/i3c.h>
 +#include <zephyr/drivers/pinctrl.h>
@@ -95,11 +96,6 @@ index 00000000000..e54ea434e07
 +#include <zephyr/pm/policy.h>
 +
 +#include <soc_common.h>
-+
-+#define LOG_DEV_ERR(dev, format, ...) LOG_ERR("%s:" #format, (dev)->name, ##__VA_ARGS__)
-+#define LOG_DEV_WRN(dev, format, ...) LOG_WRN("%s:" #format, (dev)->name, ##__VA_ARGS__)
-+#define LOG_DEV_INF(dev, format, ...) LOG_INF("%s:" #format, (dev)->name, ##__VA_ARGS__)
-+#define LOG_DEV_DBG(dev, format, ...) LOG_DBG("%s:" #format, (dev)->name, ##__VA_ARGS__)
 +
 +#define BYTE_0(x) FIELD_GET(GENMASK(7, 0), x)
 +#define BYTE_1(x) FIELD_GET(GENMASK(15, 8), x)
@@ -274,6 +270,8 @@ index 00000000000..e54ea434e07
 +	} clocks;
 +
 +	void (*irq_config_func)(const struct device *dev);
++
++	LOG_INSTANCE_PTR_DECLARE(log);
 +};
 +
 +static inline bool bus_is_idle(const struct device *dev)
@@ -297,6 +295,7 @@ index 00000000000..e54ea434e07
 +	data->curr_msg.curr_idx = 0;
 +	data->curr_msg.i3c_msgs = i3c_msgs;
 +	data->curr_msg.i2c_msgs = i2c_msgs;
++
 +	return 0;
 +}
 +
@@ -320,7 +319,7 @@ index 00000000000..e54ea434e07
 +
 +	if (tx_len > (CONFIG_I3CM_IT51XXX_DLM_SIZE / 2) ||
 +	    rx_len > (CONFIG_I3CM_IT51XXX_DLM_SIZE / 2)) {
-+		LOG_DEV_ERR(dev, "invalid tx(%d) or rx(%d) length", tx_len, rx_len);
++		LOG_INST_ERR(cfg->log, "invalid tx(%d) or rx(%d) length", tx_len, rx_len);
 +		return -EINVAL;
 +	}
 +
@@ -328,6 +327,7 @@ index 00000000000..e54ea434e07
 +	sys_write8(BYTE_1(rx_len), cfg->base + I3CM07_READ_LENGTH_HB);
 +	sys_write8(BYTE_0(tx_len), cfg->base + I3CM04_WRITE_LENGTH_LB);
 +	sys_write8(BYTE_1(tx_len), cfg->base + I3CM05_WRITE_LENGTH_HB);
++
 +	return 0;
 +}
 +
@@ -353,9 +353,9 @@ index 00000000000..e54ea434e07
 +	}
 +	reg_val |= I3CM_CYCLE_TYPE_SELECT(cycle_type);
 +	sys_write8(reg_val, cfg->base + I3CM00_CYCLE_TYPE);
-+	LOG_DEV_DBG(dev, "set cycle type(%d) %s broadcast address %s", cycle_type,
-+		    broadcast_address ? "with" : "without",
-+		    more_transfer ? "and more transfer flag" : "");
++	LOG_INST_DBG(cfg->log, "set cycle type(%d) %s broadcast address %s", cycle_type,
++		     broadcast_address ? "with" : "without",
++		     more_transfer ? "and more transfer flag" : "");
 +}
 +
 +static int it51xxx_wait_to_complete(const struct device *dev)
@@ -365,7 +365,7 @@ index 00000000000..e54ea434e07
 +	int ret = 0;
 +
 +	if (k_sem_take(&data->msg_sem, K_MSEC(CONFIG_I3CM_IT51XXX_TRANSFER_TIMEOUT_MS)) != 0) {
-+		LOG_DEV_ERR(dev, "timeout: message status(%d)", data->msg_state);
++		LOG_INST_ERR(cfg->log, "timeout: message status(%d)", data->msg_state);
 +		ret = -ETIMEDOUT;
 +	}
 +
@@ -379,6 +379,7 @@ index 00000000000..e54ea434e07
 +		ret = -EIO;
 +	}
 +	irq_enable(cfg->irq_num);
++
 +	return ret;
 +}
 +
@@ -425,7 +426,7 @@ index 00000000000..e54ea434e07
 +				    : i2c_msgs[data->curr_msg.curr_idx + 1].len;
 +		break;
 +	default:
-+		LOG_DEV_ERR(dev, "unsupported cycle type(0x%x)", cycle_type);
++		LOG_INST_ERR(cfg->log, "unsupported cycle type(0x%x)", cycle_type);
 +		return -ENOTSUP;
 +	}
 +
@@ -449,6 +450,7 @@ index 00000000000..e54ea434e07
 +	/* set cycle type register */
 +	it51xxx_set_op_type(dev, cycle_type, more_transfer, broadcast_address);
 +	data->msg_state = IT51XXX_I3CM_MSG_PRIVATE_XFER;
++
 +	return 0;
 +}
 +
@@ -477,7 +479,8 @@ index 00000000000..e54ea434e07
 +	t_low = DIV_ROUND_UP(t_low_period_ns * 10, 208) - t_hddat - 2;
 +
 +	if (t_high > 0xFFFF || t_low > 0xFFFF) {
-+		LOG_DEV_ERR(dev, "invalid t_high(0x%x) or t_low(0x%x) setting", t_high, t_low);
++		LOG_INST_ERR(cfg->log, "invalid t_high(0x%x) or t_low(0x%x) setting", t_high,
++			     t_low);
 +	}
 +
 +	sys_write8(BYTE_0(t_high), cfg->base + I3CM30_I2C_THDSTA_SUSTO_LB);
@@ -489,11 +492,12 @@ index 00000000000..e54ea434e07
 +	sys_write8(BYTE_0(t_high), cfg->base + I3CM38_I2C_THIGH_LB);
 +	sys_write8(BYTE_1(t_high), cfg->base + I3CM39_I2C_THIGH_HB);
 +
-+	LOG_DEV_DBG(dev, "i2c: t_high 0x%x, t_low 0x%x t_hddat 0x%x", t_high, t_low, t_hddat);
-+	LOG_DEV_DBG(dev, "i2c: high period: %dns, low period: %dns", t_high_period_ns,
-+		    t_low_period_ns);
-+	LOG_DEV_INF(dev, "i2c: freq: %dHz -> %dHz", config_cntlr->scl.i2c,
-+		    CALC_FREQUENCY(t_low, t_hddat, t_high));
++	LOG_INST_DBG(cfg->log, "i2c: t_high 0x%x, t_low 0x%x t_hddat 0x%x", t_high, t_low, t_hddat);
++	LOG_INST_DBG(cfg->log, "i2c: high period: %dns, low period: %dns", t_high_period_ns,
++		     t_low_period_ns);
++	LOG_INST_INF(cfg->log, "i2c: freq: %dHz -> %dHz", config_cntlr->scl.i2c,
++		     CALC_FREQUENCY(t_low, t_hddat, t_high));
++
 +	return 0;
 +}
 +
@@ -516,7 +520,7 @@ index 00000000000..e54ea434e07
 +	pp_freq = config_cntlr->scl.i3c;
 +	od_freq = cfg->clocks.i3c_od_scl_hz;
 +	if (pp_freq == 0 || od_freq == 0) {
-+		LOG_DEV_ERR(dev, "invalid freq pp(%dHz) or od(%dHz)", pp_freq, od_freq);
++		LOG_INST_ERR(cfg->log, "invalid freq pp(%dHz) or od(%dHz)", pp_freq, od_freq);
 +		return -EINVAL;
 +	}
 +
@@ -533,15 +537,15 @@ index 00000000000..e54ea434e07
 +	odhigh_ns = pphigh_ns;
 +	odlow_ns = DIV_ROUND_UP(NSEC_PER_SEC, od_freq) - odhigh_ns;
 +	if (odlow_ns < I3C_BUS_TLOW_OD_MIN_NS) {
-+		LOG_DEV_ERR(dev, "od low period(%dns) is out of spec", odlow_ns);
++		LOG_INST_ERR(cfg->log, "od low period(%dns) is out of spec", odlow_ns);
 +		return -EINVAL;
 +	}
 +	if (pphigh_ns < I3C_BUS_THIGH_PP_MIN_NS) {
-+		LOG_DEV_ERR(dev, "pp high period(%dns) is out of spec", pphigh_ns);
++		LOG_INST_ERR(cfg->log, "pp high period(%dns) is out of spec", pphigh_ns);
 +		return -EINVAL;
 +	}
 +	if (pplow_ns < I3C_BUS_TLOW_PP_MIN_NS) {
-+		LOG_DEV_ERR(dev, "pp low period(%dns) is out of spec", pplow_ns);
++		LOG_INST_ERR(cfg->log, "pp low period(%dns) is out of spec", pplow_ns);
 +		return -EINVAL;
 +	}
 +
@@ -577,13 +581,14 @@ index 00000000000..e54ea434e07
 +	sys_write8(tcasr, cfg->base + I3CM23_TCASR);
 +	sys_write8(tcbsr, cfg->base + I3CM22_TCBSR);
 +
-+	LOG_DEV_DBG(dev, "i3c: pphigh_ns: %dns, pplow_ns %dns", pphigh_ns, pplow_ns);
-+	LOG_DEV_DBG(dev, "i3c: odhigh_ns: %dns, odlow_ns %dns", odhigh_ns, odlow_ns);
-+	LOG_DEV_DBG(dev, "i3c: pphigh: %d, pplow %d, odhigh: %d, odlow %d, hddat %d", pphigh, pplow,
-+		    odhigh, odlow, hddat);
-+	LOG_DEV_INF(dev, "i3c: pp_freq: %dHz -> %dHz, od_freq %dHz -> %dHz", pp_freq,
-+		    CALC_FREQUENCY(pplow, hddat, pphigh), od_freq,
-+		    CALC_FREQUENCY(odlow, hddat, odhigh));
++	LOG_INST_DBG(cfg->log, "i3c: pphigh_ns: %dns, pplow_ns %dns", pphigh_ns, pplow_ns);
++	LOG_INST_DBG(cfg->log, "i3c: odhigh_ns: %dns, odlow_ns %dns", odhigh_ns, odlow_ns);
++	LOG_INST_DBG(cfg->log, "i3c: pphigh: %d, pplow %d, odhigh: %d, odlow %d, hddat %d", pphigh,
++		     pplow, odhigh, odlow, hddat);
++	LOG_INST_INF(cfg->log, "i3c: pp_freq: %dHz -> %dHz, od_freq %dHz -> %dHz", pp_freq,
++		     CALC_FREQUENCY(pplow, hddat, pphigh), od_freq,
++		     CALC_FREQUENCY(odlow, hddat, odhigh));
++
 +	return 0;
 +}
 +
@@ -607,6 +612,7 @@ index 00000000000..e54ea434e07
 +
 +static int it51xxx_prepare_priv_xfer(const struct device *dev)
 +{
++	const struct it51xxx_i3cm_config *cfg = dev->config;
 +	struct it51xxx_i3cm_data *data = dev->data;
 +	struct i3c_msg *i3c_msgs = data->curr_msg.i3c_msgs;
 +	struct i2c_msg *i2c_msgs = data->curr_msg.i2c_msgs;
@@ -626,7 +632,7 @@ index 00000000000..e54ea434e07
 +
 +	if (emit_stop) {
 +		if ((data->curr_msg.curr_idx + 1) != data->curr_msg.num_msgs) {
-+			LOG_DEV_ERR(dev, "invalid message: too much messages");
++			LOG_INST_ERR(cfg->log, "invalid message: too much messages");
 +			return -EINVAL;
 +		}
 +		if (it51xxx_curr_msg_is_i3c(dev)) {
@@ -639,13 +645,13 @@ index 00000000000..e54ea434e07
 +		bool next_is_restart;
 +
 +		if ((data->curr_msg.curr_idx + 1) > data->curr_msg.num_msgs) {
-+			LOG_DEV_ERR(dev, "invalid message: too few messages");
++			LOG_INST_ERR(cfg->log, "invalid message: too few messages");
 +			return -EINVAL;
 +		}
 +
 +		if (is_read) {
-+			LOG_DEV_ERR(dev,
-+				    "invalid message: multiple msgs initiated from the read flag");
++			LOG_INST_ERR(cfg->log,
++				     "invalid message: multiple msgs initiated from the read flag");
 +			return -EINVAL;
 +		}
 +
@@ -674,7 +680,7 @@ index 00000000000..e54ea434e07
 +			cycle_type = it51xxx_curr_msg_is_i3c(dev) ? PRIVATE_WRITE_READ_TRANSFER
 +								  : LEGACY_I2C_WRITE_READ_TRANSFER;
 +		} else {
-+			LOG_DEV_ERR(dev, "invalid message");
++			LOG_INST_ERR(cfg->log, "invalid message");
 +			return -EINVAL;
 +		}
 +	}
@@ -689,6 +695,7 @@ index 00000000000..e54ea434e07
 +	if (ret) {
 +		return ret;
 +	}
++
 +	return 0;
 +}
 +
@@ -697,7 +704,7 @@ index 00000000000..e54ea434e07
 +{
 +	const struct it51xxx_i3cm_config *cfg = dev->config;
 +	struct it51xxx_i3cm_data *data = dev->data;
-+	int ret = 0;
++	int ret;
 +
 +	if (!msgs) {
 +		return -EINVAL;
@@ -712,7 +719,7 @@ index 00000000000..e54ea434e07
 +			return -EINVAL;
 +		}
 +		if (msgs[i].flags & I2C_MSG_ADDR_10_BITS) {
-+			LOG_DEV_ERR(dev, "unsupported i2c extended address");
++			LOG_INST_ERR(cfg->log, "unsupported i2c extended address");
 +			return -ENOTSUP;
 +		}
 +	}
@@ -744,17 +751,19 @@ index 00000000000..e54ea434e07
 +	data->curr_msg.curr_idx = 0;
 +	it51xxx_enable_standby_state(dev, true);
 +	k_mutex_unlock(&data->lock);
++
 +	return ret;
 +}
 +
 +static int it51xxx_i3cm_configure(const struct device *dev, enum i3c_config_type type, void *config)
 +{
++	const struct it51xxx_i3cm_config *cfg = dev->config;
 +	struct it51xxx_i3cm_data *data = dev->data;
 +	struct i3c_config_controller *cntlr_cfg = config;
 +	int ret;
 +
 +	if (type != I3C_CONFIG_CONTROLLER) {
-+		LOG_DEV_ERR(dev, "support controller mode only");
++		LOG_INST_ERR(cfg->log, "support controller mode only");
 +		return -ENOTSUP;
 +	}
 +
@@ -766,6 +775,7 @@ index 00000000000..e54ea434e07
 +	k_mutex_lock(&data->lock, K_FOREVER);
 +	ret = it51xxx_set_frequency(dev);
 +	k_mutex_unlock(&data->lock);
++
 +	return ret;
 +}
 +
@@ -783,6 +793,7 @@ index 00000000000..e54ea434e07
 +	}
 +
 +	(void)memcpy(config, &data->common.ctrl_config, sizeof(data->common.ctrl_config));
++
 +	return 0;
 +}
 +
@@ -792,7 +803,7 @@ index 00000000000..e54ea434e07
 +	struct it51xxx_i3cm_data *data = dev->data;
 +	int ret = 0;
 +
-+	LOG_DEV_DBG(dev, "start daa");
++	LOG_INST_DBG(cfg->log, "start daa");
 +
 +	irq_disable(cfg->irq_num);
 +	if (!bus_is_idle(dev)) {
@@ -813,6 +824,7 @@ index 00000000000..e54ea434e07
 +
 +	it51xxx_enable_standby_state(dev, true);
 +	k_mutex_unlock(&data->lock);
++
 +	return ret;
 +}
 +
@@ -873,7 +885,7 @@ index 00000000000..e54ea434e07
 +	bool is_read = tgt_payload->rnw == 1U;
 +	bool more_transfer;
 +	uint8_t cycle_type;
-+	int ret = 0;
++	int ret;
 +
 +	irq_disable(cfg->irq_num);
 +	if (!bus_is_idle(dev)) {
@@ -920,9 +932,9 @@ index 00000000000..e54ea434e07
 +		return -EINVAL;
 +	}
 +
-+	LOG_DEV_DBG(dev, "send %s ccc(0x%x)",
-+		    i3c_ccc_is_payload_broadcast(payload) ? "broadcast" : "direct",
-+		    payload->ccc.id);
++	LOG_INST_DBG(cfg->log, "send %s ccc(0x%x)",
++		     i3c_ccc_is_payload_broadcast(payload) ? "broadcast" : "direct",
++		     payload->ccc.id);
 +
 +	k_mutex_lock(&data->lock, K_FOREVER);
 +
@@ -932,7 +944,7 @@ index 00000000000..e54ea434e07
 +
 +	if (!i3c_ccc_is_payload_broadcast(payload)) {
 +		if (payload->ccc.data_len > 1) {
-+			LOG_DEV_ERR(dev, "only support 1 ccc defining byte");
++			LOG_INST_ERR(cfg->log, "only support 1 ccc defining byte");
 +			ret = -ENOTSUP;
 +			goto out;
 +		}
@@ -972,6 +984,7 @@ index 00000000000..e54ea434e07
 +
 +out:
 +	k_mutex_unlock(&data->lock);
++
 +	return ret;
 +}
 +
@@ -988,7 +1001,7 @@ index 00000000000..e54ea434e07
 +{
 +	const struct it51xxx_i3cm_config *cfg = dev->config;
 +	struct it51xxx_i3cm_data *data = dev->data;
-+	int ret = 0;
++	int ret;
 +
 +	if (!msgs || target->dynamic_addr == 0U) {
 +		return -EINVAL;
@@ -1003,7 +1016,7 @@ index 00000000000..e54ea434e07
 +			return -EINVAL;
 +		}
 +		if ((msgs[i].flags & I3C_MSG_HDR) && (msgs[i].hdr_mode != 0)) {
-+			LOG_DEV_ERR(dev, "unsupported hdr mode");
++			LOG_INST_ERR(cfg->log, "unsupported hdr mode");
 +			return -ENOTSUP;
 +		}
 +	}
@@ -1035,6 +1048,7 @@ index 00000000000..e54ea434e07
 +	it51xxx_enable_standby_state(dev, true);
 +	data->curr_msg.curr_idx = 0;
 +	k_mutex_unlock(&data->lock);
++
 +	return ret;
 +}
 +
@@ -1057,18 +1071,20 @@ index 00000000000..e54ea434e07
 +	struct it51xxx_i3cm_data *data = dev->data;
 +
 +	data->ibi_hj_response = ack;
++
 +	return 0;
 +}
 +
 +static int it51xxx_i3cm_ibi_enable(const struct device *dev, struct i3c_device_desc *target)
 +{
++	const struct it51xxx_i3cm_config *cfg = dev->config;
 +	struct it51xxx_i3cm_data *data = dev->data;
 +	struct i3c_ccc_events i3c_events;
 +	int ret;
 +	uint8_t idx;
 +
 +	if (!i3c_ibi_has_payload(target)) {
-+		LOG_DEV_ERR(dev, "i3cm only supports ibi with payload");
++		LOG_INST_ERR(cfg->log, "i3cm only supports ibi with payload");
 +		return -ENOTSUP;
 +	}
 +
@@ -1077,13 +1093,13 @@ index 00000000000..e54ea434e07
 +	}
 +
 +	if (data->ibi.num_addr >= ARRAY_SIZE(data->ibi.addr)) {
-+		LOG_DEV_ERR(dev, "no more free space in the ibi list");
++		LOG_INST_ERR(cfg->log, "no more free space in the ibi list");
 +		return -ENOMEM;
 +	}
 +
 +	for (idx = 0; idx < ARRAY_SIZE(data->ibi.addr); idx++) {
 +		if (data->ibi.addr[idx] == target->dynamic_addr) {
-+			LOG_DEV_ERR(dev, "selected target is already in the ibi list");
++			LOG_INST_ERR(cfg->log, "selected target is already in the ibi list");
 +			return -EINVAL;
 +		}
 +	}
@@ -1096,20 +1112,22 @@ index 00000000000..e54ea434e07
 +		}
 +
 +		if (idx >= ARRAY_SIZE(data->ibi.addr)) {
-+			LOG_DEV_ERR(dev, "cannot support more ibis");
++			LOG_INST_ERR(cfg->log, "cannot support more ibis");
 +			return -ENOTSUP;
 +		}
 +	} else {
 +		idx = 0;
 +	}
 +
-+	LOG_DEV_DBG(dev, "ibi enabling for 0x%x (bcr 0x%x)", target->dynamic_addr, target->bcr);
++	LOG_INST_DBG(cfg->log, "ibi enabling for 0x%x (bcr 0x%x)", target->dynamic_addr,
++		     target->bcr);
 +
 +	/* enable target ibi event by enec command */
 +	i3c_events.events = I3C_CCC_EVT_INTR;
 +	ret = i3c_ccc_do_events_set(target, true, &i3c_events);
 +	if (ret != 0) {
-+		LOG_DEV_ERR(dev, "failed to send ibi enec for 0x%x(%d)", target->dynamic_addr, ret);
++		LOG_INST_ERR(cfg->log, "failed to send ibi enec for 0x%x(%d)", target->dynamic_addr,
++			     ret);
 +		return ret;
 +	}
 +
@@ -1119,11 +1137,13 @@ index 00000000000..e54ea434e07
 +	if (data->ibi.num_addr == 1U) {
 +		it51xxx_enable_standby_state(dev, false);
 +	}
++
 +	return 0;
 +}
 +
 +static int it51xxx_i3cm_ibi_disable(const struct device *dev, struct i3c_device_desc *target)
 +{
++	const struct it51xxx_i3cm_config *cfg = dev->config;
 +	struct it51xxx_i3cm_data *data = dev->data;
 +	struct i3c_ccc_events i3c_events;
 +	int ret;
@@ -1140,7 +1160,7 @@ index 00000000000..e54ea434e07
 +	}
 +
 +	if (idx == ARRAY_SIZE(data->ibi.addr)) {
-+		LOG_DEV_ERR(dev, "selected target is not in ibi list");
++		LOG_INST_ERR(cfg->log, "selected target is not in ibi list");
 +		return -ENODEV;
 +	}
 +
@@ -1151,15 +1171,17 @@ index 00000000000..e54ea434e07
 +		it51xxx_enable_standby_state(dev, true);
 +	}
 +
-+	LOG_DEV_DBG(dev, "ibi disabling for 0x%x (bcr 0x%x)", target->dynamic_addr, target->bcr);
++	LOG_INST_DBG(cfg->log, "ibi disabling for 0x%x (bcr 0x%x)", target->dynamic_addr,
++		     target->bcr);
 +
 +	/* disable target ibi event by disec command */
 +	i3c_events.events = I3C_CCC_EVT_INTR;
 +	ret = i3c_ccc_do_events_set(target, false, &i3c_events);
 +	if (ret != 0) {
-+		LOG_DEV_ERR(dev, "failed to send ibi disec for 0x%x(%d)", target->dynamic_addr,
-+			    ret);
++		LOG_INST_ERR(cfg->log, "failed to send ibi disec for 0x%x(%d)",
++			     target->dynamic_addr, ret);
 +	}
++
 +	return ret;
 +}
 +#endif /* CONFIG_I3C_USE_IBI */
@@ -1190,6 +1212,7 @@ index 00000000000..e54ea434e07
 +			break;
 +		}
 +	}
++
 +	return mode;
 +}
 +
@@ -1203,7 +1226,7 @@ index 00000000000..e54ea434e07
 +
 +	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 +	if (ret != 0) {
-+		LOG_DEV_ERR(dev, "failed to apply pinctrl, ret %d", ret);
++		LOG_INST_ERR(cfg->log, "failed to apply pinctrl, ret %d", ret);
 +		return ret;
 +	}
 +
@@ -1214,13 +1237,13 @@ index 00000000000..e54ea434e07
 +	k_mutex_init(&data->lock);
 +
 +	if (i3c_bus_mode(&cfg->common.dev_list) != I3C_BUS_MODE_PURE) {
-+		LOG_DEV_ERR(dev, "only support pure mode currently");
++		LOG_INST_ERR(cfg->log, "only support pure mode currently");
 +		return -ENOTSUP;
 +	}
 +
 +	ret = i3c_addr_slots_init(dev);
 +	if (ret != 0) {
-+		LOG_DEV_ERR(dev, "failed to init slots, ret %d", ret);
++		LOG_INST_ERR(cfg->log, "failed to init slots, ret %d", ret);
 +		return ret;
 +	}
 +
@@ -1245,20 +1268,20 @@ index 00000000000..e54ea434e07
 +		reg_val |= FIELD_PREP(I3CM_DLM_SIZE_MASK, 2);
 +		break;
 +	default:
-+		LOG_DEV_ERR(dev, "invalid dlm size(%d)", CONFIG_I3CM_IT51XXX_DLM_SIZE);
++		LOG_INST_ERR(cfg->log, "invalid dlm size(%d)", CONFIG_I3CM_IT51XXX_DLM_SIZE);
 +		return -EINVAL;
 +	};
 +
 +	/* set i3cm channel selection */
 +	reg_val &= ~I3CM_CHANNEL_SELECT_MASK;
-+	LOG_DEV_DBG(dev, "channel %d is selected", cfg->io_channel);
++	LOG_INST_DBG(cfg->log, "channel %d is selected", cfg->io_channel);
 +	reg_val |= FIELD_PREP(I3CM_CHANNEL_SELECT_MASK, cfg->io_channel);
 +
 +	/* select 4k pull-up resistor and enable i3c engine*/
 +	reg_val |= (I3CM_PULL_UP_RESISTOR | I3CM_ENABLE);
 +	sys_write8(reg_val, cfg->base + I3CM50_CONTROL_3);
 +
-+	LOG_DEV_DBG(dev, "dlm base address 0x%x", (uint32_t)&data->dlm_data);
++	LOG_INST_DBG(cfg->log, "dlm base address 0x%x", (uint32_t)&data->dlm_data);
 +	sys_write8(FIELD_GET(GENMASK(17, 16), (uint32_t)&data->dlm_data),
 +		   cfg->base + I3CM53_DLM_BASE_ADDRESS_HB);
 +	sys_write8(BYTE_1((uint32_t)&data->dlm_data), cfg->base + I3CM52_DLM_BASE_ADDRESS_LB);
@@ -1281,9 +1304,10 @@ index 00000000000..e54ea434e07
 +			 * an error code to allow the application layer to
 +			 * reinitialize by sending ccc.
 +			 */
-+			LOG_DEV_ERR(dev, "failed to init i3c bus, ret %d", ret);
++			LOG_INST_ERR(cfg->log, "failed to init i3c bus, ret %d", ret);
 +		}
 +	}
++
 +	return 0;
 +}
 +
@@ -1301,7 +1325,7 @@ index 00000000000..e54ea434e07
 +
 +	rx_count = it51xxx_get_received_data_count(dev);
 +	if (rx_count != 8) {
-+		LOG_DEV_ERR(dev, "daa: rx count (%d) not as expected", rx_count);
++		LOG_INST_ERR(cfg->log, "daa: rx count (%d) not as expected", rx_count);
 +		return -EINVAL;
 +	}
 +
@@ -1319,7 +1343,7 @@ index 00000000000..e54ea434e07
 +					   &cfg->common.dev_list, pid, false, false, &target,
 +					   &dyn_addr);
 +	if (ret != 0) {
-+		LOG_DEV_ERR(dev, "no dynamic address could be assigned to target");
++		LOG_INST_ERR(cfg->log, "no dynamic address could be assigned to target");
 +		return -EINVAL;
 +	}
 +
@@ -1330,8 +1354,8 @@ index 00000000000..e54ea434e07
 +		target->bcr = data->dlm_data.rx_data[6];
 +		target->dcr = data->dlm_data.rx_data[7];
 +	} else {
-+		LOG_DEV_INF(
-+			dev,
++		LOG_INST_INF(
++			cfg->log,
 +			"pid 0x%04x%08x is not in registered device list, given dynamic address "
 +			"0x%x",
 +			vendor_id, part_no, dyn_addr);
@@ -1345,6 +1369,7 @@ index 00000000000..e54ea434e07
 +		i3c_addr_slots_mark_free(&data->common.attached_dev.addr_slots,
 +					 target->static_addr);
 +	}
++
 +	return 0;
 +}
 +
@@ -1356,7 +1381,7 @@ index 00000000000..e54ea434e07
 +	uint8_t cycle_type;
 +	bool more_transfer;
 +	bool is_read = tgt_payload[data->ccc_msgs.target_idx].rnw == 1U;
-+	int ret = 0;
++	int ret;
 +
 +	it51xxx_direct_ccc_xfer_end(dev);
 +
@@ -1386,11 +1411,13 @@ index 00000000000..e54ea434e07
 +	it51xxx_set_op_type(dev, cycle_type, more_transfer, false);
 +	sys_write8(I3CM_TARGET_ADDRESS(tgt_payload[data->ccc_msgs.target_idx].addr),
 +		   cfg->base + I3CM02_TARGET_ADDRESS);
-+	return ret;
++
++	return 0;
 +}
 +
 +static int it51xxx_private_next_xfer(const struct device *dev)
 +{
++	const struct it51xxx_i3cm_config *cfg = dev->config;
 +	struct it51xxx_i3cm_data *data = dev->data;
 +	struct i3c_msg *i3c_msgs = data->curr_msg.i3c_msgs;
 +	struct i2c_msg *i2c_msgs = data->curr_msg.i2c_msgs;
@@ -1416,7 +1443,7 @@ index 00000000000..e54ea434e07
 +	if (is_write && next_is_write && !next_is_restart) {
 +		data->curr_msg.curr_idx++;
 +	} else {
-+		LOG_DEV_ERR(dev, "unknown next private xfer message");
++		LOG_INST_ERR(cfg->log, "unknown next private xfer message");
 +		return -EINVAL;
 +	}
 +
@@ -1425,11 +1452,13 @@ index 00000000000..e54ea434e07
 +	if (ret) {
 +		return ret;
 +	}
++
 +	return 0;
 +}
 +
 +static void it51xxx_private_xfer_end(const struct device *dev)
 +{
++	const struct it51xxx_i3cm_config *cfg = dev->config;
 +	struct it51xxx_i3cm_data *data = dev->data;
 +	struct i3c_msg *i3c_msgs = data->curr_msg.i3c_msgs;
 +	struct i2c_msg *i2c_msgs = data->curr_msg.i2c_msgs;
@@ -1446,7 +1475,7 @@ index 00000000000..e54ea434e07
 +			i3c_msgs[curr_msg_idx].num_xfer = data_count;
 +			memcpy(i3c_msgs[curr_msg_idx].buf, data->dlm_data.rx_data,
 +			       MIN(i3c_msgs[curr_msg_idx].len, data_count));
-+			LOG_DEV_DBG(dev, "i3c: private rx %d bytes", data_count);
++			LOG_INST_DBG(cfg->log, "i3c: private rx %d bytes", data_count);
 +			LOG_HEXDUMP_DBG(i3c_msgs[curr_msg_idx].buf, i3c_msgs[curr_msg_idx].len,
 +					"i3c: private xfer rx:");
 +		}
@@ -1458,7 +1487,8 @@ index 00000000000..e54ea434e07
 +				i3c_msgs[curr_msg_idx + 1].num_xfer = data_count;
 +				memcpy(i3c_msgs[curr_msg_idx + 1].buf, data->dlm_data.rx_data,
 +				       MIN(i3c_msgs[curr_msg_idx + 1].len, data_count));
-+				LOG_DEV_DBG(dev, "i3c: private tx-then-rx %d bytes", data_count);
++				LOG_INST_DBG(cfg->log, "i3c: private tx-then-rx %d bytes",
++					     data_count);
 +				LOG_HEXDUMP_DBG(i3c_msgs[curr_msg_idx + 1].buf,
 +						i3c_msgs[curr_msg_idx + 1].len,
 +						"i3c: private xfer tx-then-rx:");
@@ -1469,7 +1499,7 @@ index 00000000000..e54ea434e07
 +			data_count = it51xxx_get_received_data_count(dev);
 +			memcpy(i2c_msgs[curr_msg_idx].buf, data->dlm_data.rx_data,
 +			       MIN(i2c_msgs[curr_msg_idx].len, data_count));
-+			LOG_DEV_DBG(dev, "i2c: private rx %d bytes", data_count);
++			LOG_INST_DBG(cfg->log, "i2c: private rx %d bytes", data_count);
 +			LOG_HEXDUMP_DBG(i2c_msgs[curr_msg_idx].buf, i2c_msgs[curr_msg_idx].len,
 +					"i2c: private xfer rx:");
 +		}
@@ -1480,7 +1510,8 @@ index 00000000000..e54ea434e07
 +				data_count = it51xxx_get_received_data_count(dev);
 +				memcpy(i2c_msgs[curr_msg_idx + 1].buf, data->dlm_data.rx_data,
 +				       MIN(i2c_msgs[curr_msg_idx + 1].len, data_count));
-+				LOG_DEV_DBG(dev, "i2c: private tx-then-rx %d bytes", data_count);
++				LOG_INST_DBG(cfg->log, "i2c: private tx-then-rx %d bytes",
++					     data_count);
 +				LOG_HEXDUMP_DBG(i2c_msgs[curr_msg_idx + 1].buf,
 +						i2c_msgs[curr_msg_idx + 1].len,
 +						"i2c: private xfer tx-then-rx:");
@@ -1492,6 +1523,7 @@ index 00000000000..e54ea434e07
 +#ifdef CONFIG_I3C_USE_IBI
 +static void it51xxx_process_ibi_payload(const struct device *dev)
 +{
++	const struct it51xxx_i3cm_config *cfg = dev->config;
 +	struct it51xxx_i3cm_data *data = dev->data;
 +	uint8_t payload[CONFIG_I3C_IBI_MAX_PAYLOAD_SIZE];
 +	size_t payload_sz = 0;
@@ -1508,13 +1540,13 @@ index 00000000000..e54ea434e07
 +		}
 +
 +		if (payload_sz > sizeof(payload)) {
-+			LOG_DEV_WRN(dev, "ibi payloads(%d) is too much", payload_sz);
++			LOG_INST_WRN(cfg->log, "ibi payloads(%d) is too much", payload_sz);
 +		}
 +		memcpy(payload, data->dlm_data.rx_data, MIN(payload_sz, sizeof(payload)));
 +	}
 +
 +	if (i3c_ibi_work_enqueue_target_irq(target, &payload[0], payload_sz) != 0) {
-+		LOG_DEV_ERR(dev, "failed to enqueue tir work");
++		LOG_INST_ERR(cfg->log, "failed to enqueue tir work");
 +	}
 +}
 +#endif /* CONFIG_I3C_USE_IBI */
@@ -1525,13 +1557,13 @@ index 00000000000..e54ea434e07
 +	struct it51xxx_i3cm_data *data = dev->data;
 +
 +	if (int_status & PARITY_ERROR) {
-+		LOG_DEV_ERR(dev, "isr: transaction(%d) parity error", data->msg_state);
++		LOG_INST_ERR(cfg->log, "isr: transaction(%d) parity error", data->msg_state);
 +		data->msg_state = IT51XXX_I3CM_MSG_ERROR;
 +		sys_write8(PARITY_ERROR, cfg->base + I3CM01_STATUS);
 +	}
 +
 +	if (int_status & CRC5_ERROR) {
-+		LOG_DEV_ERR(dev, "isr: transaction(%d) crc5 error", data->msg_state);
++		LOG_INST_ERR(cfg->log, "isr: transaction(%d) crc5 error", data->msg_state);
 +		data->msg_state = IT51XXX_I3CM_MSG_ERROR;
 +		sys_write8(CRC5_ERROR, cfg->base + I3CM01_STATUS);
 +	}
@@ -1547,14 +1579,15 @@ index 00000000000..e54ea434e07
 +	int_status &= ~START_TRANSFER;
 +
 +	if (!data->is_initialized) {
-+		LOG_DEV_DBG(dev, "i3cm interrupt(0x%x) occurs before initialization was complete",
-+			    int_status);
++		LOG_INST_DBG(cfg->log,
++			     "i3cm interrupt(0x%x) occurs before initialization was complete",
++			     int_status);
 +	}
 +
 +	it51xxx_check_error(dev, int_status);
 +
 +	if (int_status & IBI_INTERRUPT) {
-+		LOG_DEV_DBG(dev, "isr: ibi interrupt is detected");
++		LOG_INST_DBG(cfg->log, "isr: ibi interrupt is detected");
 +
 +		data->msg_state = bus_is_idle(dev) ? IT51XXX_I3CM_MSG_IBI : IT51XXX_I3CM_MSG_ABORT;
 +#ifdef CONFIG_I3C_USE_IBI
@@ -1583,38 +1616,38 @@ index 00000000000..e54ea434e07
 +			sys_write8(IBI_INTERRUPT, cfg->base + I3CM01_STATUS);
 +			if (data->ibi_hj_response) {
 +				if (i3c_ibi_work_enqueue_hotjoin(dev) != 0) {
-+					LOG_DEV_ERR(dev, "failed to enqueue hot-join work");
++					LOG_INST_ERR(cfg->log, "failed to enqueue hot-join work");
 +				}
 +			}
 +		} else {
 +			it51xxx_accept_ibi(dev, false);
 +			sys_write8(IBI_INTERRUPT, cfg->base + I3CM01_STATUS);
-+			LOG_DEV_ERR(dev, "unsupported controller role request");
++			LOG_INST_ERR(cfg->log, "unsupported controller role request");
 +		}
 +#else
-+		LOG_DEV_ERR(dev, "isr: Kconfig I3C_USE_IBI is disabled");
++		LOG_INST_ERR(cfg->log, "isr: Kconfig I3C_USE_IBI is disabled");
 +		it51xxx_accept_ibi(dev, false);
 +		sys_write8(IBI_INTERRUPT, cfg->base + I3CM01_STATUS);
 +#endif /* CONFIG_I3C_USE_IBI */
 +	}
 +
 +	if (int_status & TRANSFER_END) {
-+		LOG_DEV_DBG(dev, "isr: end transfer is detected");
++		LOG_INST_DBG(cfg->log, "isr: end transfer is detected");
 +		/* clear tx and rx length */
 +		it51xxx_set_tx_rx_length(dev, 0, 0);
 +		if (int_status & TARGET_NACK) {
-+			LOG_DEV_DBG(dev, "isr: target nack is detected");
++			LOG_INST_DBG(cfg->log, "isr: target nack is detected");
 +			if (data->msg_state == IT51XXX_I3CM_MSG_DAA) {
-+				LOG_DEV_DBG(dev, "isr: no target should be assigned address");
++				LOG_INST_DBG(cfg->log, "isr: no target should be assigned address");
 +			} else {
-+				LOG_DEV_ERR(dev, "isr: no target responses");
++				LOG_INST_ERR(cfg->log, "isr: no target responses");
 +				data->msg_state = IT51XXX_I3CM_MSG_ERROR;
 +			}
 +		}
 +
 +		switch (data->msg_state) {
 +		case IT51XXX_I3CM_MSG_ABORT:
-+			LOG_DEV_INF(dev, "isr: transfer was aborted due to ibi transaction");
++			LOG_INST_INF(cfg->log, "isr: transfer was aborted due to ibi transaction");
 +			data->transfer_is_aborted = true;
 +			__fallthrough;
 +		case IT51XXX_I3CM_MSG_IBI:
@@ -1640,17 +1673,17 @@ index 00000000000..e54ea434e07
 +			data->ccc_msgs.target_idx = 0;
 +			break;
 +		case IT51XXX_I3CM_MSG_ERROR:
-+			LOG_DEV_ERR(dev, "isr: message status error");
++			LOG_INST_ERR(cfg->log, "isr: message status error");
 +			data->error_is_detected = true;
 +			break;
 +		case IT51XXX_I3CM_MSG_DAA:
-+			LOG_DEV_DBG(dev, "isr: daa finished");
++			LOG_INST_DBG(cfg->log, "isr: daa finished");
 +			break;
 +		case IT51XXX_I3CM_MSG_IDLE:
-+			LOG_DEV_WRN(dev, "isr: end transfer occurs but bus is in idle");
++			LOG_INST_WRN(cfg->log, "isr: end transfer occurs but bus is in idle");
 +			break;
 +		default:
-+			LOG_DEV_ERR(dev, "isr: unknown message status(%d)", data->msg_state);
++			LOG_INST_ERR(cfg->log, "isr: unknown message status(%d)", data->msg_state);
 +			break;
 +		}
 +
@@ -1665,7 +1698,7 @@ index 00000000000..e54ea434e07
 +	if (int_status & NEXT_TRANSFER) {
 +		int ret = 0;
 +
-+		LOG_DEV_DBG(dev, "isr: next transfer is detected");
++		LOG_INST_DBG(cfg->log, "isr: next transfer is detected");
 +		switch (data->msg_state) {
 +		case IT51XXX_I3CM_MSG_DAA:
 +			ret = it51xxx_daa_next_xfer(dev);
@@ -1678,8 +1711,8 @@ index 00000000000..e54ea434e07
 +			break;
 +		default:
 +			ret = -EINVAL;
-+			LOG_DEV_ERR(dev, "isr: next transfer, unknown msg status(0x%x)",
-+				    data->msg_state);
++			LOG_INST_ERR(cfg->log, "isr: next transfer, unknown msg status(0x%x)",
++				     data->msg_state);
 +			break;
 +		};
 +
@@ -1717,6 +1750,8 @@ index 00000000000..e54ea434e07
 +};
 +
 +#define IT51XXX_I3CM_INIT(n)                                                                       \
++	LOG_INSTANCE_REGISTER(DT_NODE_FULL_NAME_TOKEN(DT_DRV_INST(n)), n,                          \
++			      CONFIG_I3C_IT51XXX_LOG_LEVEL);                                       \
 +	PINCTRL_DT_INST_DEFINE(n);                                                                 \
 +	static struct i3c_device_desc it51xxx_i3cm_device_array_##n[] =                            \
 +		I3C_DEVICE_ARRAY_DT_INST(n);                                                       \
@@ -1745,7 +1780,7 @@ index 00000000000..e54ea434e07
 +		.clocks.i3c_scl_tcasr = DT_INST_PROP_OR(n, i3c_scl_tcasr, 1),                      \
 +		.clocks.i3c_scl_tcbsr = DT_INST_PROP_OR(n, i3c_scl_tcbsr, 0),                      \
 +		.clocks.i2c_scl_hddat = DT_INST_PROP_OR(n, i2c_scl_hddat, 0),                      \
-+	};                                                                                         \
++		LOG_INSTANCE_PTR_INIT(log, DT_NODE_FULL_NAME_TOKEN(DT_DRV_INST(n)), n)};           \
 +	static struct it51xxx_i3cm_data i3c_data_##n = {                                           \
 +		.common.ctrl_config.scl.i3c = DT_INST_PROP_OR(n, i3c_scl_hz, 0),                   \
 +		.common.ctrl_config.scl.i2c = DT_INST_PROP_OR(n, i2c_scl_hz, 0),                   \
@@ -1840,10 +1875,10 @@ index 00000000000..9b02b7f13c7
 +      t_hddat = (i2c-scl-hddat + 1) * 20.8ns. The range of i3c-scl-hddat is
 +      [65535:0].
 diff --git a/dts/riscv/ite/it51xxx.dtsi b/dts/riscv/ite/it51xxx.dtsi
-index da6508b7c11..4e3cea86692 100644
+index db1a348663b..91be9e6dd13 100644
 --- a/dts/riscv/ite/it51xxx.dtsi
 +++ b/dts/riscv/ite/it51xxx.dtsi
-@@ -1204,6 +1204,28 @@
+@@ -1043,6 +1043,28 @@
  			status = "disabled";
  		};
  

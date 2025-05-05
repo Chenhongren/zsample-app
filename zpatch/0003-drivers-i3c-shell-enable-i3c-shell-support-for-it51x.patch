@@ -1,4 +1,4 @@
-From 9bb117580a0185875b60dcbd80d807d46c3babd6 Mon Sep 17 00:00:00 2001
+From 4335e3de4950e2d479722629363d441d1a016b8e Mon Sep 17 00:00:00 2001
 From: Ren Chen <Ren.Chen@ite.com.tw>
 Date: Thu, 23 Jan 2025 15:34:59 +0800
 Subject: [PATCH 3/3] drivers: i3c: shell: enable i3c shell support for

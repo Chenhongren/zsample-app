@@ -1,4 +1,4 @@
-From 116048ca67f7222fa80dad4a203be6d488568162 Mon Sep 17 00:00:00 2001
+From e8504bb7ba999c83c6cae26dbde3359afc8a5973 Mon Sep 17 00:00:00 2001
 From: Ren Chen <Ren.Chen@ite.com.tw>
 Date: Tue, 31 Dec 2024 11:32:51 +0800
 Subject: [PATCH 1/3] drivers: i3c: add it51xxx i3cs driver
@@ -10,10 +10,10 @@ Signed-off-by: Ren Chen <Ren.Chen@ite.com.tw>
  drivers/i3c/CMakeLists.txt             |   5 +
  drivers/i3c/Kconfig                    |   1 +
  drivers/i3c/Kconfig.it51xxx            |  86 +++
- drivers/i3c/i3cs_it51xxx.c             | 861 +++++++++++++++++++++++++
+ drivers/i3c/i3cs_it51xxx.c             | 883 +++++++++++++++++++++++++
  dts/bindings/i3c/ite,it51xxx-i3cs.yaml |  63 ++
  dts/riscv/ite/it51xxx.dtsi             |  24 +
- 6 files changed, 1040 insertions(+)
+ 6 files changed, 1062 insertions(+)
  create mode 100644 drivers/i3c/Kconfig.it51xxx
  create mode 100644 drivers/i3c/i3cs_it51xxx.c
  create mode 100644 dts/bindings/i3c/ite,it51xxx-i3cs.yaml
@@ -139,10 +139,10 @@ index 00000000000..f21924de5f2
 +endif # I3CS_IT51XXX
 diff --git a/drivers/i3c/i3cs_it51xxx.c b/drivers/i3c/i3cs_it51xxx.c
 new file mode 100644
-index 00000000000..e6b8b2ba303
+index 00000000000..04b4a6a1f44
 --- /dev/null
 +++ b/drivers/i3c/i3cs_it51xxx.c
-@@ -0,0 +1,861 @@
+@@ -0,0 +1,883 @@
 +/*
 + * Copyright (c) 2025 ITE Technology Inc.
 + *
@@ -152,7 +152,8 @@ index 00000000000..e6b8b2ba303
 +#define DT_DRV_COMPAT ite_it51xxx_i3cs
 +
 +#include <zephyr/logging/log.h>
-+LOG_MODULE_REGISTER(i3cs_it51xxx, CONFIG_I3C_IT51XXX_LOG_LEVEL);
++#include <zephyr/logging/log_instance.h>
++LOG_MODULE_REGISTER(i3cs_it51xxx);
 +
 +#include <zephyr/drivers/i3c.h>
 +#include <zephyr/drivers/pinctrl.h>
@@ -162,11 +163,6 @@ index 00000000000..e6b8b2ba303
 +#include <zephyr/pm/policy.h>
 +
 +#include <soc_common.h>
-+
-+#define LOG_DEV_ERR(dev, format, ...) LOG_ERR("%s:" #format, (dev)->name, ##__VA_ARGS__)
-+#define LOG_DEV_WRN(dev, format, ...) LOG_WRN("%s:" #format, (dev)->name, ##__VA_ARGS__)
-+#define LOG_DEV_INF(dev, format, ...) LOG_INF("%s:" #format, (dev)->name, ##__VA_ARGS__)
-+#define LOG_DEV_DBG(dev, format, ...) LOG_DBG("%s:" #format, (dev)->name, ##__VA_ARGS__)
 +
 +#define BYTE_0(x) FIELD_GET(GENMASK(7, 0), x)
 +#define BYTE_1(x) FIELD_GET(GENMASK(15, 8), x)
@@ -271,20 +267,21 @@ index 00000000000..e6b8b2ba303
 +#define IBI_MDB_GROUP_MASK              GENMASK(7, 5)
 +#define IBI_MDB_GROUP_PENDING_READ_NOTI 5
 +
-+#define IT51XXX_I3CS_MAX_MRL_MWL 0xFFF /* 4095 bytes */
++#define IT51XXX_DIRECT_MODE_FIFO_SIZE 4096
++#define IT51XXX_I3CS_MAX_MRL_MWL      0xFFF /* 4095 bytes */
 +
 +enum it51xxx_i3cs_event_type {
-+	i3cs_event_normal_mode = 0,
-+	i3cs_event_ibi,
-+	i3cs_event_control_request,
-+	i3cs_event_hot_join,
++	EVT_NORMAL_MODE = 0,
++	EVT_IBI,
++	EVT_CONTROL_REQUEST,
++	EVT_HOT_JOIN,
 +};
 +
 +enum it51xxx_i3cs_request_event {
-+	none = 0,
-+	request_not_sent,
-+	request_nack_evt,
-+	request_ack_evt,
++	NONE = 0,
++	REQUEST_NOT_SENT,
++	REQUEST_NACK_EVT,
++	REQUEST_ACK_EVT,
 +};
 +
 +static const struct fifo_size_mapping_t {
@@ -312,7 +309,7 @@ index 00000000000..e6b8b2ba303
 +	struct {
 +		uint8_t tx_data[CONFIG_I3CS_IT51XXX_TX_FIFO_SIZE];
 +		uint8_t rx_data[CONFIG_I3CS_IT51XXX_RX_FIFO_SIZE];
-+	} fifo __aligned(4096);
++	} fifo __aligned(IT51XXX_DIRECT_MODE_FIFO_SIZE);
 +};
 +
 +struct it51xxx_i3cs_config {
@@ -330,20 +327,22 @@ index 00000000000..e6b8b2ba303
 +	} extern_enable;
 +
 +	void (*irq_config_func)(const struct device *dev);
++
++	LOG_INSTANCE_PTR_DECLARE(log);
 +};
 +
 +static inline bool rx_direct_mode_is_enabled(const struct device *dev)
 +{
 +	struct it51xxx_i3cs_data *data = dev->data;
 +
-+	return (sizeof(data->fifo.rx_data) == 4096);
++	return sizeof(data->fifo.rx_data) == IT51XXX_DIRECT_MODE_FIFO_SIZE;
 +}
 +
 +static inline bool tx_direct_mode_is_enabled(const struct device *dev)
 +{
 +	struct it51xxx_i3cs_data *data = dev->data;
 +
-+	return (sizeof(data->fifo.tx_data) == 4096);
++	return sizeof(data->fifo.tx_data) == IT51XXX_DIRECT_MODE_FIFO_SIZE;
 +}
 +
 +static inline uint16_t rx_byte_cnt_in_fifo(const struct device *dev)
@@ -396,7 +395,7 @@ index 00000000000..e6b8b2ba303
 +
 +	tx_count = tx_byte_cnt_in_fifo(dev);
 +	if (tx_count) {
-+		LOG_DEV_WRN(dev, "dropped the remaining %d bytes in the tx fifo", tx_count);
++		LOG_INST_WRN(cfg->log, "dropped the remaining %d bytes in the tx fifo", tx_count);
 +	}
 +
 +	/* flush tx fifo */
@@ -413,26 +412,33 @@ index 00000000000..e6b8b2ba303
 +
 +	/* fill tx fifo with data */
 +	memcpy(data->fifo.tx_data, buf, len);
++
 +	return 0;
 +}
 +
-+static int it51xxx_i3cs_target_register(const struct device *dev, struct i3c_target_config *cfg)
++static int it51xxx_i3cs_target_register(const struct device *dev, struct i3c_target_config *tgt_cfg)
 +{
++	const struct it51xxx_i3cs_config *cfg = dev->config;
 +	struct it51xxx_i3cs_data *data = dev->data;
 +
 +	if (!data->target_config) {
-+		data->target_config = cfg;
++		data->target_config = tgt_cfg;
 +
 +		chip_block_idle();
 +		pm_policy_state_lock_get(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
 +	} else {
-+		LOG_DEV_WRN(dev, "the target has already been registered");
++		LOG_INST_WRN(cfg->log, "the target has already been registered");
 +	}
++
 +	return 0;
 +}
 +
-+static int it51xxx_i3cs_target_unregister(const struct device *dev, struct i3c_target_config *cfg)
++static int it51xxx_i3cs_target_unregister(const struct device *dev,
++					  struct i3c_target_config *tgt_cfg)
 +{
++	ARG_UNUSED(tgt_cfg);
++
++	const struct it51xxx_i3cs_config *cfg = dev->config;
 +	struct it51xxx_i3cs_data *data = dev->data;
 +
 +	if (data->target_config) {
@@ -442,35 +448,38 @@ index 00000000000..e6b8b2ba303
 +		pm_policy_state_lock_put(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
 +		chip_permit_idle();
 +	} else {
-+		LOG_DEV_WRN(dev, "the target has not been registered");
++		LOG_INST_WRN(cfg->log, "the target has not been registered");
 +	}
++
 +	return 0;
 +}
 +
 +static int it51xxx_i3cs_target_tx_write(const struct device *dev, uint8_t *buf, uint16_t len,
 +					uint8_t hdr_mode)
 +{
++	const struct it51xxx_i3cs_config *cfg = dev->config;
 +	struct it51xxx_i3cs_data *data = dev->data;
-+	int ret = 0;
++	int ret;
 +
 +	if (!buf || len == 0) {
-+		LOG_DEV_ERR(dev, "null buffer or zero length");
++		LOG_INST_ERR(cfg->log, "null buffer or zero length");
 +		return -EINVAL;
 +	}
 +
 +	if (hdr_mode != 0) {
-+		LOG_DEV_ERR(dev, "unsupported hdr mode");
++		LOG_INST_ERR(cfg->log, "unsupported hdr mode");
 +		return -ENOTSUP;
 +	}
 +
 +	if (len > sizeof(data->fifo.tx_data)) {
-+		LOG_DEV_ERR(dev, "invalid tx length(%d)", len);
++		LOG_INST_ERR(cfg->log, "invalid tx length(%d)", len);
 +		return -ENOSPC;
 +	}
 +
 +	k_mutex_lock(&data->lock, K_FOREVER);
 +	ret = it51xxx_i3cs_prepare_tx_fifo(dev, buf, len);
 +	k_mutex_unlock(&data->lock);
++
 +	return ret ? ret : len;
 +}
 +
@@ -499,12 +508,14 @@ index 00000000000..e6b8b2ba303
 +
 +static int it51xxx_i3cs_wait_to_complete(const struct device *dev)
 +{
++	const struct it51xxx_i3cs_config *cfg = dev->config;
 +	struct it51xxx_i3cs_data *data = dev->data;
 +
 +	if (k_sem_take(&data->ibi_sync_sem, K_MSEC(CONFIG_I3CS_IT51XXX_IBI_TIMEOUT_MS)) != 0) {
-+		LOG_DEV_ERR(dev, "ibi event transmission timed out");
++		LOG_INST_ERR(cfg->log, "ibi event transmission timed out");
 +		return -ETIMEDOUT;
 +	}
++
 +	return 0;
 +}
 +
@@ -517,7 +528,7 @@ index 00000000000..e6b8b2ba303
 +	uint8_t reg_val;
 +
 +	if (!request) {
-+		LOG_DEV_ERR(dev, "ibi request is null");
++		LOG_INST_ERR(cfg->log, "ibi request is null");
 +		return -EINVAL;
 +	}
 +
@@ -525,7 +536,7 @@ index 00000000000..e6b8b2ba303
 +
 +	reg_val = sys_read8(cfg->base + I3CS08_STATUS_0);
 +	if (reg_val & BUS_IS_BUSY) {
-+		LOG_DEV_ERR(dev, "bus is busy");
++		LOG_INST_ERR(cfg->log, "bus is busy");
 +		ret = -EBUSY;
 +		goto out;
 +	}
@@ -533,31 +544,31 @@ index 00000000000..e6b8b2ba303
 +	switch (request->ibi_type) {
 +	case I3C_IBI_TARGET_INTR:
 +		if (it51xxx_i3cs_is_ibi_disable(dev) || !it51xxx_i3cs_dynamic_addr_valid(dev)) {
-+			LOG_DEV_ERR(dev, "ibi is disabled or dynamic address is invalid");
++			LOG_INST_ERR(cfg->log, "ibi is disabled or dynamic address is invalid");
 +			ret = -EINVAL;
 +			goto out;
 +		}
 +		if (request->payload_len > sizeof(data->fifo.tx_data) + 1) {
-+			LOG_DEV_ERR(dev, "payload too large for ibi tir");
++			LOG_INST_ERR(cfg->log, "payload too large for ibi tir");
 +			ret = -ENOMEM;
 +			goto out;
 +		}
 +		if (config_target->bcr & I3C_BCR_IBI_PAYLOAD_HAS_DATA_BYTE &&
 +		    request->payload_len == 0) {
-+			LOG_DEV_ERR(dev, "ibi should be with payload");
++			LOG_INST_ERR(cfg->log, "ibi should be with payload");
 +			ret = -EINVAL;
 +			goto out;
 +		}
 +		if (!(config_target->bcr & I3C_BCR_IBI_PAYLOAD_HAS_DATA_BYTE) &&
 +		    request->payload_len != 0) {
-+			LOG_DEV_ERR(dev, "ibi should not be with payload");
++			LOG_INST_ERR(cfg->log, "ibi should not be with payload");
 +			ret = -EINVAL;
 +			goto out;
 +		}
 +
 +		if (request->payload_len == 0) {
-+			LOG_DEV_DBG(dev, "send ibi without payload");
-+			sys_write8(I3CS_EVENT_SELECT(i3cs_event_ibi), cfg->base + I3CS0C_CONTROL_0);
++			LOG_INST_DBG(cfg->log, "send ibi without payload");
++			sys_write8(I3CS_EVENT_SELECT(EVT_IBI), cfg->base + I3CS0C_CONTROL_0);
 +		} else {
 +			/* set mandatory data byte */
 +			sys_write8(request->payload[0], cfg->base + I3CS0D_CONTROL_1);
@@ -570,8 +581,8 @@ index 00000000000..e6b8b2ba303
 +					 * pending data notification if the ibi payload size
 +					 * exceeds 1.
 +					 */
-+					LOG_DEV_ERR(dev, "unsupported multiple payloads with "
-+							 "pending read noti. group");
++					LOG_INST_ERR(cfg->log, "unsupported multiple payloads with "
++							       "pending read noti. group");
 +					ret = -ENOTSUP;
 +					goto out;
 +				}
@@ -582,38 +593,40 @@ index 00000000000..e6b8b2ba303
 +					goto out;
 +				}
 +
-+				sys_write8(EXTENDED_IBI_DATA | I3CS_EVENT_SELECT(i3cs_event_ibi),
++				sys_write8(EXTENDED_IBI_DATA | I3CS_EVENT_SELECT(EVT_IBI),
 +					   cfg->base + I3CS0C_CONTROL_0);
 +			} else {
-+				sys_write8(I3CS_EVENT_SELECT(i3cs_event_ibi),
++				sys_write8(I3CS_EVENT_SELECT(EVT_IBI),
 +					   cfg->base + I3CS0C_CONTROL_0);
 +			}
 +		}
 +		break;
 +	case I3C_IBI_HOTJOIN:
 +		if (it51xxx_i3cs_is_hj_disable(dev) || it51xxx_i3cs_dynamic_addr_valid(dev)) {
-+			LOG_DEV_ERR(dev, "hj is disabled or dynamic address is already assigned");
++			LOG_INST_ERR(cfg->log,
++				     "hj is disabled or dynamic address is already assigned");
 +			ret = -EINVAL;
 +			goto out;
 +		}
-+		sys_write8(I3CS_EVENT_SELECT(i3cs_event_hot_join), cfg->base + I3CS0C_CONTROL_0);
++		sys_write8(I3CS_EVENT_SELECT(EVT_HOT_JOIN), cfg->base + I3CS0C_CONTROL_0);
 +		break;
 +	case I3C_IBI_CONTROLLER_ROLE_REQUEST:
-+		LOG_DEV_ERR(dev, "unsupported controller role request");
++		LOG_INST_ERR(cfg->log, "unsupported controller role request");
 +		ret = -ENOTSUP;
 +		goto out;
 +	default:
-+		LOG_DEV_ERR(dev, "invalid ibi type(0x%x)", request->ibi_type);
++		LOG_INST_ERR(cfg->log, "invalid ibi type(0x%x)", request->ibi_type);
 +		ret = -EINVAL;
 +		goto out;
 +	}
 +
 +	if (it51xxx_i3cs_wait_to_complete(dev) != 0) {
-+		LOG_DEV_WRN(dev, "failed to issue ibi. maybe the controller is offline");
-+		sys_write8(I3CS_EVENT_SELECT(i3cs_event_normal_mode), cfg->base + I3CS0C_CONTROL_0);
++		LOG_INST_WRN(cfg->log, "failed to issue ibi. maybe the controller is offline");
++		sys_write8(I3CS_EVENT_SELECT(EVT_NORMAL_MODE), cfg->base + I3CS0C_CONTROL_0);
 +	}
 +out:
 +	k_mutex_unlock(&data->lock);
++
 +	return ret;
 +}
 +#endif /* CONFIG_I3C_USE_IBI */
@@ -626,7 +639,8 @@ index 00000000000..e6b8b2ba303
 +	if (sizeof(data->fifo.rx_data) <= 128 && sizeof(data->fifo.tx_data) <= 128) {
 +		if (FIFO_ADDR_HB(((uint32_t)&data->fifo.tx_data)) !=
 +		    FIFO_ADDR_HB(((uint32_t)&data->fifo.rx_data))) {
-+			LOG_DEV_ERR(dev, "the msb of tx and rx fifo address should be the same");
++			LOG_INST_ERR(cfg->log,
++				     "the msb of tx and rx fifo address should be the same");
 +			return -EINVAL;
 +		}
 +		sys_write8(FIFO_ADDR_LB((uint32_t)&data->fifo.rx_data),
@@ -640,11 +654,11 @@ index 00000000000..e6b8b2ba303
 +
 +	if (!rx_direct_mode_is_enabled(dev) || !tx_direct_mode_is_enabled(dev)) {
 +		/* The tx and rx direct modes must be enabled simultaneously. */
-+		LOG_DEV_ERR(dev, "tx or rx fifo size is invalid for direct mode");
++		LOG_INST_ERR(cfg->log, "tx or rx fifo size is invalid for direct mode");
 +		return -EINVAL;
 +	}
 +
-+	LOG_DEV_DBG(dev, "direct mode is enabled");
++	LOG_INST_DBG(cfg->log, "direct mode is enabled");
 +	sys_write8(sys_read8(cfg->base + I3CS4D_CONTROL_REG_4) | I3CS_DIRECT_MODE_ENABLE,
 +		   cfg->base + I3CS4D_CONTROL_REG_4);
 +	sys_write8(FIFO_ADDR_LB((uint32_t)&data->fifo.rx_data),
@@ -655,6 +669,7 @@ index 00000000000..e6b8b2ba303
 +		   cfg->base + I3CS14_DIRECT_TX_FIFO_BASE_ADDR_LB);
 +	sys_write8(FIFO_ADDR_HB((uint32_t)&data->fifo.tx_data),
 +		   cfg->base + I3CS15_DIRECT_TX_FIFO_BASE_ADDR_HB);
++
 +	return 0;
 +}
 +
@@ -668,18 +683,18 @@ index 00000000000..e6b8b2ba303
 +
 +	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 +	if (ret != 0) {
-+		LOG_DEV_ERR(dev, "failed to apply pinctrl, ret %d", ret);
++		LOG_INST_ERR(cfg->log, "failed to apply pinctrl, ret %d", ret);
 +		return ret;
 +	}
 +
 +	/* set i3cs channel selection */
 +	sys_write8(cfg->io_channel, cfg->base + I3CS4D_CONTROL_REG_4);
-+	LOG_DEV_DBG(dev, "select io channel %d", cfg->io_channel);
++	LOG_INST_DBG(cfg->log, "select io channel %d", cfg->io_channel);
 +
 +	/* set extern enable bit */
 +	if (cfg->extern_enable.bit_mask > 7) {
-+		LOG_DEV_ERR(dev, "invalid bit mask %d for extern enable setting",
-+			    cfg->extern_enable.bit_mask);
++		LOG_INST_ERR(cfg->log, "invalid bit mask %d for extern enable setting",
++			     cfg->extern_enable.bit_mask);
 +		return -EINVAL;
 +	}
 +	sys_write8(sys_read8(cfg->extern_enable.addr) | BIT(cfg->extern_enable.bit_mask),
@@ -699,24 +714,25 @@ index 00000000000..e6b8b2ba303
 +		sys_write8(BYTE_1(config_target->pid), cfg->base + I3CS6D_PRAT_NUMBER_1);
 +		sys_write8(BYTE_2(config_target->pid), cfg->base + I3CS6E_PRAT_NUMBER_2);
 +		sys_write8(BYTE_3(config_target->pid), cfg->base + I3CS6F_PRAT_NUMBER_3);
-+		LOG_DEV_INF(dev, "set pid random value: %#llx", config_target->pid);
++		LOG_INST_INF(cfg->log, "set pid random value: %#llx", config_target->pid);
 +	}
 +	if (I3C_BCR_DEVICE_ROLE(config_target->bcr) == I3C_BCR_DEVICE_ROLE_I3C_CONTROLLER_CAPABLE) {
-+		LOG_DEV_ERR(dev, "i3cs doesn't support controller capability");
++		LOG_INST_ERR(cfg->log, "i3cs doesn't support controller capability");
 +		return -ENOTSUP;
 +	}
 +	sys_write8(config_target->bcr, cfg->base + I3CS72_BCR);
 +	sys_write8(config_target->dcr, cfg->base + I3CS71_DCR);
 +
-+	LOG_DEV_INF(dev, "tx fifo size(%d), address(0x%x)", sizeof(data->fifo.tx_data),
-+		    (uint32_t)&data->fifo.tx_data);
-+	LOG_DEV_INF(dev, "rx fifo size(%d), address(0x%x)", sizeof(data->fifo.rx_data),
-+		    (uint32_t)&data->fifo.rx_data);
++	LOG_INST_INF(cfg->log, "tx fifo size(%d), address(0x%x)", sizeof(data->fifo.tx_data),
++		     (uint32_t)&data->fifo.tx_data);
++	LOG_INST_INF(cfg->log, "rx fifo size(%d), address(0x%x)", sizeof(data->fifo.rx_data),
++		     (uint32_t)&data->fifo.rx_data);
 +
 +	/* set tx and rx fifo size */
 +	for (uint8_t i = 0; i <= ARRAY_SIZE(fifo_size_table); i++) {
 +		if (i == ARRAY_SIZE(fifo_size_table)) {
-+			LOG_DEV_ERR(dev, "unknown rx fifo size %d", sizeof(data->fifo.rx_data));
++			LOG_INST_ERR(cfg->log, "unknown rx fifo size %d",
++				     sizeof(data->fifo.rx_data));
 +			return -ENOTSUP;
 +		}
 +		if (sizeof(data->fifo.rx_data) == fifo_size_table[i].fifo_size) {
@@ -728,7 +744,8 @@ index 00000000000..e6b8b2ba303
 +	}
 +	for (uint8_t i = 0; i <= ARRAY_SIZE(fifo_size_table); i++) {
 +		if (i == ARRAY_SIZE(fifo_size_table)) {
-+			LOG_DEV_ERR(dev, "unknown tx fifo size %d", sizeof(data->fifo.tx_data));
++			LOG_INST_ERR(cfg->log, "unknown tx fifo size %d",
++				     sizeof(data->fifo.tx_data));
 +			return -ENOTSUP;
 +		}
 +		if (sizeof(data->fifo.tx_data) == fifo_size_table[i].fifo_size) {
@@ -766,6 +783,7 @@ index 00000000000..e6b8b2ba303
 +	sys_write8(reg_val, cfg->base + I3CS11_INTERRUPT_ENABLE_CTRL_0);
 +
 +	cfg->irq_config_func(dev);
++
 +	return 0;
 +}
 +
@@ -787,27 +805,29 @@ index 00000000000..e6b8b2ba303
 +	errwarn0_val = sys_read8(cfg->base + I3CS1C_ERROR_WARNING_REG_0);
 +	errwarn1_val = sys_read8(cfg->base + I3CS1D_ERROR_WARNING_REG_1);
 +	if (errwarn0_val & INVALID_START) {
-+		LOG_DEV_ERR(dev, "isr: invalid start");
++		LOG_INST_ERR(cfg->log, "isr: invalid start");
 +	}
 +	if (errwarn0_val & CONTROLLER_TERMINATED) {
-+		LOG_DEV_WRN(dev, "isr: terminated by controller, flush the remaining %d bytes",
-+			    tx_byte_cnt_in_fifo(dev));
++		LOG_INST_WRN(cfg->log,
++			     "isr: terminated by controller, flush the remaining %d bytes",
++			     tx_byte_cnt_in_fifo(dev));
 +		sys_write8(sys_read8(cfg->base + I3CS2C_DATA_CTRL_0) | FLUSH_TX_FIFO,
 +			   cfg->base + I3CS2C_DATA_CTRL_0);
 +	}
 +	if (errwarn0_val & TX_FIFO_UNDERRUN) {
-+		LOG_DEV_ERR(dev, "isr: the tx fifo is underrun");
++		LOG_INST_ERR(cfg->log, "isr: the tx fifo is underrun");
 +	}
 +	if (errwarn0_val & RX_FIFO_OVERRUN) {
-+		LOG_DEV_ERR(dev, "isr: the rx fifo is overrun");
++		LOG_INST_ERR(cfg->log, "isr: the rx fifo is overrun");
 +	}
 +	if (errwarn1_val & S0_OR_S1_ERROR) {
-+		LOG_DEV_ERR(dev, "isr: s0 or s1 error is detected");
++		LOG_INST_ERR(cfg->log, "isr: s0 or s1 error is detected");
 +	}
 +	if (errwarn1_val & SDR_PARITY_ERROR) {
-+		LOG_DEV_ERR(dev, "isr: sdr parity error");
++		LOG_INST_ERR(cfg->log, "isr: sdr parity error");
 +	}
-+	LOG_DEV_DBG(dev, "isr: error/warning is detected(0x%x, 0x%x)", errwarn0_val, errwarn1_val);
++	LOG_INST_DBG(cfg->log, "isr: error/warning is detected(0x%x, 0x%x)", errwarn0_val,
++		     errwarn1_val);
 +
 +	/* write 1 to clear the error and warning registers */
 +	sys_write8(errwarn0_val, cfg->base + I3CS1C_ERROR_WARNING_REG_0);
@@ -845,7 +865,7 @@ index 00000000000..e6b8b2ba303
 +		if (dfifo_status & I3CS_DIRECT_RX_DONE) {
 +			sys_write8(I3CS_DIRECT_RX_DONE, cfg->base + I3CS4E_DIRECT_FIFO_STATUS);
 +		} else {
-+			LOG_DEV_WRN(dev, "isr: rx pending, but rx not completed");
++			LOG_INST_WRN(cfg->log, "isr: rx pending, but rx not completed");
 +			return;
 +		}
 +		invoke_rx_cb(dev, ccc, data->fifo.rx_data, byte_count);
@@ -902,7 +922,7 @@ index 00000000000..e6b8b2ba303
 +
 +	int_status_1 = sys_read8(cfg->base + I3CS09_STATUS_1);
 +	int_status_2 = sys_read8(cfg->base + I3CS0A_STATUS_2);
-+	LOG_DEV_DBG(dev, "isr: interrupt status 0x%x 0x%x", int_status_1, int_status_2);
++	LOG_INST_DBG(cfg->log, "isr: interrupt status 0x%x 0x%x", int_status_1, int_status_2);
 +
 +	if (int_status_1 & INT_DYN_ADDR_CHANGE) {
 +		if (it51xxx_i3cs_dynamic_addr_valid(dev)) {
@@ -910,12 +930,12 @@ index 00000000000..e6b8b2ba303
 +				data->target_config->address = DYNAMIC_ADDRESS(
 +					sys_read8(cfg->base + I3CS64_DYNAMIC_ADDRESS));
 +			}
-+			LOG_DEV_DBG(dev, "dynamic address is assigned");
++			LOG_INST_DBG(cfg->log, "dynamic address is assigned");
 +		} else {
 +			if (data->target_config) {
 +				data->target_config->address = 0;
 +			}
-+			LOG_DEV_DBG(dev, "dynamic address is reset");
++			LOG_INST_DBG(cfg->log, "dynamic address is reset");
 +		}
 +	}
 +
@@ -941,15 +961,15 @@ index 00000000000..e6b8b2ba303
 +	}
 +
 +	switch (int_status_2 & EVENT_DETECT_MASK) {
-+	case FIELD_PREP(EVENT_DETECT_MASK, request_nack_evt):
-+		LOG_DEV_ERR(dev, "isr: nack is detected");
++	case FIELD_PREP(EVENT_DETECT_MASK, REQUEST_NACK_EVT):
++		LOG_INST_ERR(cfg->log, "isr: nack is detected");
 +		break;
-+	case FIELD_PREP(EVENT_DETECT_MASK, request_not_sent):
-+		LOG_DEV_ERR(dev, "isr: request is not sent yet");
++	case FIELD_PREP(EVENT_DETECT_MASK, REQUEST_NOT_SENT):
++		LOG_INST_ERR(cfg->log, "isr: request is not sent yet");
 +		break;
-+	case FIELD_PREP(EVENT_DETECT_MASK, request_ack_evt):
++	case FIELD_PREP(EVENT_DETECT_MASK, REQUEST_ACK_EVT):
 +		if (int_status_2 & INT_EVENT) {
-+			LOG_DEV_DBG(dev, "isr: tir/hj is completed");
++			LOG_INST_DBG(cfg->log, "isr: tir/hj is completed");
 +		}
 +		break;
 +	default:
@@ -963,7 +983,7 @@ index 00000000000..e6b8b2ba303
 +	}
 +
 +	if (int_status_2 & INT_TARGET_RST) {
-+		LOG_DEV_INF(dev, "isr: target reset pattern is detected");
++		LOG_INST_INF(cfg->log, "isr: target reset pattern is detected");
 +	}
 +
 +	sys_write8(int_status_1, cfg->base + I3CS09_STATUS_1);
@@ -977,6 +997,8 @@ index 00000000000..e6b8b2ba303
 +	}
 +
 +#define IT51XXX_I3CS_INIT(n)                                                                       \
++	LOG_INSTANCE_REGISTER(DT_NODE_FULL_NAME_TOKEN(DT_DRV_INST(n)), n,                          \
++			      CONFIG_I3C_IT51XXX_LOG_LEVEL);                                       \
 +	PINCTRL_DT_INST_DEFINE(n);                                                                 \
 +	static void it51xxx_i3cs_config_func_##n(const struct device *dev)                         \
 +	{                                                                                          \
@@ -990,7 +1012,7 @@ index 00000000000..e6b8b2ba303
 +		.io_channel = DT_INST_PROP(n, io_channel),                                         \
 +		.extern_enable = IT51XXX_I3CS_EXTERN_ENABLE(n),                                    \
 +		.vendor_info = DT_INST_PROP_OR(n, vendor_info_fields, 0x0),                        \
-+	};                                                                                         \
++		LOG_INSTANCE_PTR_INIT(log, DT_NODE_FULL_NAME_TOKEN(DT_DRV_INST(n)), n)};           \
 +	static struct it51xxx_i3cs_data i3c_data_##n = {                                           \
 +		.config_target.static_addr = DT_INST_PROP_OR(n, static_address, 0),                \
 +		.config_target.pid = DT_INST_PROP_OR(n, pid_random_value, 0),                      \
@@ -1074,10 +1096,10 @@ index 00000000000..391efafec18
 +      Device Characteristics Register, used for bus enumeration with ENTDAA.
 +      (default: 0x00)
 diff --git a/dts/riscv/ite/it51xxx.dtsi b/dts/riscv/ite/it51xxx.dtsi
-index 77db31daad5..da6508b7c11 100644
+index 3538a62be56..db1a348663b 100644
 --- a/dts/riscv/ite/it51xxx.dtsi
 +++ b/dts/riscv/ite/it51xxx.dtsi
-@@ -1203,5 +1203,29 @@
+@@ -1042,5 +1042,29 @@
  			reg = <0x00f046e0 0xf>;
  			status = "disabled";
  		};
