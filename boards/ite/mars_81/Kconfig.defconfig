@@ -6,15 +6,15 @@ if BOARD_MARS_81
 if PM
 
 config PM_DEVICE
-     default y
+	default y
 
 choice PM_POLICY
-     default PM_POLICY_CUSTOM
+	default PM_POLICY_CUSTOM
 endchoice
 
 endif # PM
 
 config INPUT
-     default y if KSCAN
+	default y if KSCAN
 
 endif # BOARD_MARS_81

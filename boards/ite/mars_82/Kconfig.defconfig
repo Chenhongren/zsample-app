@@ -4,6 +4,6 @@
 if BOARD_MARS_82
 
 config INPUT
-     default y if KSCAN
+	default y if KSCAN
 
 endif ## BOARD_MARS_82

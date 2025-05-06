@@ -6,10 +6,10 @@ if BOARD_MARS_5
 if PM
 
 config PM_DEVICE
-     default y
+	default y
 
 choice PM_POLICY
-     default PM_POLICY_CUSTOM
+	default PM_POLICY_CUSTOM
 endchoice
 
 endif # PM
