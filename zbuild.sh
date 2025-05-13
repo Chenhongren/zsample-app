@@ -1,6 +1,7 @@
 #!/bin/bash
 
-version=0.1.0
+version=0.1.1
+build=0
 update=0
 
 func_help() {
@@ -9,6 +10,7 @@ func_help() {
 	printf "Supported ite board ref:\n"
 	find boards/ite/ -mindepth 1 -maxdepth 1 -type d -printf "  - %f\n"
 	printf "Options:\n"
+	printf "\t--build  | -b Build the firmware, default: disable\n"
 	printf "\t--update | -u Update the firmware after compiling, default: disable\n"
 	printf "\t--help   | -h Help\n"
 	exit 1
@@ -32,6 +34,9 @@ do
 			exit 1
 		fi
 		shift 2
+	elif [ "$1" = "--build" ] || [ "$1" = "-b" ]; then
+		build=1
+		shift 1
 	elif [ "$1" = "--update" ] || [ "$1" = "-u" ]; then
 		update=1
 		shift 1
@@ -55,7 +60,7 @@ if [ ! -e app/"${fname}".overlay ]; then
 fi
 
 if [ ! -e app/"${fname}".conf ]; then
-	printf "Error: project config(%s.conf) is missing\n""${fname}"
+	printf "Error: Project config(%s.conf) is missing\n""${fname}"
 	func_help
 	exit 1
 fi
@@ -65,15 +70,27 @@ if [ ! -d "build" ]; then
 fi
 
 printf "\n\nINFO: Apply zephyr patches...\n"
-bash zpatch/apply-patches.sh $(pwd)"/zpatch" $(pwd)"/../zephyr"
+bash zpatch/apply-patches.sh "$(pwd)/zpatch" "$(pwd)/../zephyr"
 
-printf "\n\nINFO: Build image...\n"
-if west build -p always -b "${board_ref}" -f app -d "${build_dir}" "${arg_overlay}" "${arg_prj_cfg}"; then
-	binary_fw="${build_dir}"/zephyr/zephyr.bin
-	if [ "${update}" == "1" ]; then
-		printf "\n\nINFO: Update firmware...\n"
-		sudo ite -f "${binary_fw}"
-	else
-		printf "\n\nINFO: skip firmware(%s) update...\n" "${binary_fw}"
+if [ "${build}" == "1" ]; then
+	printf "\n\nINFO: Build image...\n"
+	if ! west build -p always -b "${board_ref}" -f app -d "${build_dir}" "${arg_overlay}" "${arg_prj_cfg}"; then
+		exit
 	fi
+else
+	printf "\n\nINFO: Skip firmware build(%s) update...\n" "${board_ref}_${board_func}"
+fi
+
+binary_fw="${build_dir}"/zephyr/zephyr.bin
+
+if [ "${update}" == "1" ]; then
+	if [ ! -e "${binary_fw}" ]; then
+		printf "\n\nERROR: Cannot find firmware image(%s)\n" "${binary_fw}"
+		exit
+	fi
+
+	printf "\n\nINFO: Update firmware...\n"
+	sudo ite -f "${binary_fw}"
+else
+	printf "\n\nINFO: Skip firmware(%s) update...\n" "${binary_fw}"
 fi

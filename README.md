@@ -28,13 +28,13 @@ cd my-workspace
 west update
 ```
 
-### Building and running
+### Building
 
 To build the application, run the following command:
 
 ```shell
 cd zsample-app
-bash zbuild.sh -r mars_5 -f i3cm
+bash zbuild.sh -r mars_5 -f i3cm --build
 ```
 
 ### Testing
