@@ -1,0 +1,60 @@
+/*
+ * Copyright (c) 2025 ITE Corporation. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/sensor/lps2xdf.h>
+
+/ {
+	aliases {
+		fru-eeprom = &mx25r16;
+	};
+};
+
+&spi0 {
+	status = "okay";
+	cs-gpios = <&gpioe 1 GPIO_ACTIVE_LOW>,
+		    <&gpiob 7 GPIO_ACTIVE_LOW>;
+
+	pinctrl-0 = <&ssce0_gpj7_default
+		     &ssce1_gph7_default
+		     &ssck_gpa6_default
+		     &smosi_gpc6_default
+		     &smiso_gpc4_default>;
+	pinctrl-names = "default";
+
+	mx25r16: mx25v1635f@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <12000000>;
+		jedec-id = [c2 23 15];
+		size = <0x1000000>; // 16Mb
+	};
+};
+
+&i3c0 {
+	status = "okay";
+	pinctrl-0 = <&i3c0_clk_gpj3_default
+		     &i3c0_data_gpj4_default>;
+	pinctrl-names = "default";
+	i3c-scl-hz = <2530000>; // 2.53MHz
+	i3c-od-scl-hz = <650000>; // 0.65MHz
+	i2c-scl-hz = <400000>;
+	i3c-pp-duty-cycle = <84>;
+	i3c-scl-tcas = <5>;
+	i3c-scl-tcbs = <5>;
+	i3c-scl-tcasr = <5>;
+	i3c-scl-tcbsr = <5>;
+};
+
+&i3c1 {
+	status = "okay";
+	pinctrl-0 = <
+		     &i3c1_clk_gpj5_default
+		     &i3c1_data_gpe1_default>;
+	pinctrl-names = "default";
+	i3c-scl-hz = <6000000>;
+	i3c-od-scl-hz = <400000>;
+	i2c-scl-hz = <400000>;
+	i2c-scl-hddat = <2>;
+};
