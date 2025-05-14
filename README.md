@@ -42,5 +42,5 @@ bash zbuild.sh -r mars_5 -f i3cm --build
 To execute Twister integration test, run the following command:
 
 ```shell
-west twister  -T app -v --inline-logs --integration
+west twister  -T tests -v --inline-logs --integration
 ```
