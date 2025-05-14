@@ -30,11 +30,21 @@ west update
 
 ### Building
 
-To build the application, run the following command:
-
+To test a specific I/O function, run:
 ```shell
 cd zsample-app
-bash zbuild.sh -r mars_5 -f i3cm --build
+bash zbuild.sh -r mars_5 -f i3cm --job tests --build
+```
+
+To compile the program, run:
+```shell
+cd zsample-app
+bash zbuild.sh -r mars_5 --job program --build
+```
+
+For more information, use the --help option:
+```shell
+bash zbuild.sh --help
 ```
 
 ### Testing
