@@ -32,20 +32,51 @@ static int spi_nor_access(const struct device *const dev, struct spi_config spi_
 {
 	bool is_write = (access & NOR_ACCESS_WRITE) != 0U;
 	uint8_t buf[5] = {0};
+#if LEGACY
 	struct spi_buf spi_buf[2] = {{
 					     .buf = buf,
 					     .len = 1,
 				     },
 				     {.buf = data, .len = length}};
-
+#else
+	struct spi_buf spi_buf_tx[2] = {
+		{
+			.buf = buf,
+			.len = 1,
+		},
+		{
+			.buf = data,
+			.len = length
+		}
+	};
+	struct spi_buf spi_buf_rx[2] = {
+		{
+			.buf = NULL,
+			.len = 1,
+		},
+		{
+			.buf = data,
+			.len = length
+		}
+	};
+#endif /* LEGACY */
 	buf[0] = opcode;
 	const struct spi_buf_set tx_set = {
+#if LEGACY
 		.buffers = spi_buf,
 		.count = (length != 0) ? 2 : 1,
+#else
+		.buffers = spi_buf_tx,
+		.count = (is_write && length != 0) ? 2 : 1,
+#endif /* LEGACY */
 	};
 
 	const struct spi_buf_set rx_set = {
+#if LEGACY
 		.buffers = spi_buf,
+#else
+		.buffers = spi_buf_rx,
+#endif /* LEGACY */
 		.count = 2,
 	};
 

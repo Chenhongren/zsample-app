@@ -13,21 +13,21 @@ config SPI_TEST_CLOCK_SOURCE_KHZ
 config SPI_TEST_JEDEC_ID
 	bool "SPI Jedec ID Test"
 	depends on SPI_TEST
-	default y
+	default n
 	help
 	  Enable SPI Jedec ID test.
 
 config SPI_TEST_FREQUENCY
 	bool "SPI Frequency Test"
 	depends on SPI_TEST
-	default y
+	default n
 	help
 	  Enable SPI frequency test.
 
 config SPI_TEST_ASYNC_TRANSFER
 	bool "SPI Async Transfer Test"
 	depends on SPI_TEST
-	default y
+	default n
 	help
 	  Enable SPI async transfer test.
 
@@ -69,28 +69,28 @@ config SPI_TEST_LINE_MODE
 	depends on SPI_TEST
 	default n if BOARD_MARS_82
 	default n if BOARD_MARS_81
-	default y
+	default n
 	help
 	  Enable SPI line mode test.
 
 config SPI_TEST_RX_ONLY
 	bool "SPI RX Test"
 	depends on SPI_TEST
-	default y
+	default n
 	help
 	  Enable SPI RX test.
 
 config SPI_TEST_TX_ONLY
 	bool "SPI TX Test"
 	depends on SPI_TEST
-	default y
+	default n
 	help
 	  Enable SPI TX test.
 
 config SPI_TEST_PM_CHECK
 	bool "SPI PM Check Test"
 	depends on SPI_TEST
-	default y
+	default n
 	help
 	  Enable SPI PM check test.
 

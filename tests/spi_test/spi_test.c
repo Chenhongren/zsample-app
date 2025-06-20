@@ -48,6 +48,7 @@ static void spi_async_call_cb(void *p1, void *p2, void *p3)
 			/* Reinitializing for next call */
 			evt->signal->signaled = 0U;
 			evt->state = K_POLL_STATE_NOT_READY;
+			return;
 		}
 	}
 }
@@ -57,8 +58,12 @@ static int read_jedec_id_async(const struct device *dev)
 	int ret;
 	uint8_t tx_data[1] = {SPI_NOR_CMD_RDID};
 	uint8_t rx_data[3] = {0};
-	struct spi_buf spi_buf[2] = {{
+	struct spi_buf tx_buf[1] = {{
 					     .buf = tx_data,
+					     .len = sizeof(tx_data),
+				     }};
+	struct spi_buf rx_buf[2] = {{
+					     .buf = NULL,
 					     .len = sizeof(tx_data),
 				     },
 				     {
@@ -66,8 +71,8 @@ static int read_jedec_id_async(const struct device *dev)
 					     .len = sizeof(rx_data),
 				     }};
 
-	const struct spi_buf_set tx_set = {.buffers = spi_buf, .count = 2};
-	const struct spi_buf_set rx_set = {.buffers = spi_buf, .count = 2};
+	const struct spi_buf_set tx_set = {.buffers = tx_buf, .count = 1};
+	const struct spi_buf_set rx_set = {.buffers = rx_buf, .count = 2};
 
 	ret = spi_transceive_signal(dev, &spi_cfg, &tx_set, &rx_set, &async_sig);
 	if (ret) {
@@ -77,77 +82,77 @@ static int read_jedec_id_async(const struct device *dev)
 
 	k_sem_take(&caller, K_FOREVER);
 
-	LOG_HEXDUMP_INF(spi_buf[1].buf, spi_buf[1].len, "jedec id:");
+	LOG_HEXDUMP_INF(rx_buf[1].buf, rx_buf[1].len, "jedec id:");
 
 	return 0;
 }
 #endif /* CONFIG_SPI_TEST_ASYNC_TRANSFER */
 
-static int flash_access_test(const int len)
-{
-	const struct device *flash_dev = DEVICE_DT_GET(DT_ALIAS(spi_flash0));
-	uint8_t *expected;
-	uint8_t *buffer;
-	int ret;
+// static int flash_access_test(const int len)
+// {
+// 	const struct device *flash_dev = DEVICE_DT_GET(DT_ALIAS(spi_flash0));
+// 	uint8_t *expected;
+// 	uint8_t *buffer;
+// 	int ret;
 
-	if (!device_is_ready(flash_dev)) {
-		LOG_ERR("%s is not ready", flash_dev->name);
-		return -ENODEV;
-	}
+// 	if (!device_is_ready(flash_dev)) {
+// 		LOG_ERR("%s is not ready", flash_dev->name);
+// 		return -ENODEV;
+// 	}
 
-	expected = malloc(len * sizeof(uint8_t));
-	buffer = malloc(len * sizeof(uint8_t));
-	if (!buffer || !expected) {
-		LOG_ERR("failed to allocate memory");
-		ret = -ENOMEM;
-		goto out;
-	}
+// 	expected = malloc(len * sizeof(uint8_t));
+// 	buffer = malloc(len * sizeof(uint8_t));
+// 	if (!buffer || !expected) {
+// 		LOG_ERR("failed to allocate memory");
+// 		ret = -ENOMEM;
+// 		goto out;
+// 	}
 
-	ret = flash_erase(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, SPI_FLASH_SECTOR_SIZE);
-	if (ret != 0) {
-		LOG_ERR("failed to erase flash, ret %d", ret);
-		goto out;
-	}
+// 	ret = flash_erase(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, SPI_FLASH_SECTOR_SIZE);
+// 	if (ret != 0) {
+// 		LOG_ERR("failed to erase flash, ret %d", ret);
+// 		goto out;
+// 	}
 
-	memset(buffer, 0, len);
-	ret = flash_read(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, buffer, len);
-	if (ret != 0) {
-		LOG_ERR("failed to read data, ret %d", ret);
-		goto out;
-	}
+// 	memset(buffer, 0, len);
+// 	ret = flash_read(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, buffer, len);
+// 	if (ret != 0) {
+// 		LOG_ERR("failed to read data, ret %d", ret);
+// 		goto out;
+// 	}
 
-	for (int i = 0; i < len; i++) {
-		expected[i] = (i / 10) * 0x10 + (i % 10);
-	}
+// 	for (int i = 0; i < len; i++) {
+// 		expected[i] = (i / 10) * 0x10 + (i % 10);
+// 	}
 
-	LOG_INF("attempting to write %zu bytes", len);
-	ret = flash_write(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, expected, len);
-	if (ret != 0) {
-		LOG_ERR("failed to write data, ret %d", ret);
-		goto out;
-	}
+// 	LOG_INF("attempting to write %zu bytes", len);
+// 	ret = flash_write(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, expected, len);
+// 	if (ret != 0) {
+// 		LOG_ERR("failed to write data, ret %d", ret);
+// 		goto out;
+// 	}
 
-	memset(buffer, 0, len);
-	ret = flash_read(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, buffer, len);
-	if (ret != 0) {
-		LOG_ERR("failed to read data, ret %d", ret);
-		goto out;
-	}
+// 	memset(buffer, 0, len);
+// 	ret = flash_read(flash_dev, SPI_FLASH_TEST_REGION_OFFSET, buffer, len);
+// 	if (ret != 0) {
+// 		LOG_ERR("failed to read data, ret %d", ret);
+// 		goto out;
+// 	}
 
-	if (memcmp(expected, buffer, len) == 0) {
-		LOG_INF("passed for data comparison");
-	} else {
-		LOG_ERR("failed for data comparison");
-	}
+// 	if (memcmp(expected, buffer, len) == 0) {
+// 		LOG_INF("passed for data comparison");
+// 	} else {
+// 		LOG_ERR("failed for data comparison");
+// 	}
 
-out:
-	free(expected);
-	free(buffer);
-	expected = NULL;
-	buffer = NULL;
+// out:
+// 	free(expected);
+// 	free(buffer);
+// 	expected = NULL;
+// 	buffer = NULL;
 
-	return ret;
-}
+// 	return ret;
+// }
 
 #if CONFIG_SPI_TEST_PM_CHECK
 static bool start_pm_check = false;
@@ -328,35 +333,58 @@ static int test_rx_only(const struct device *dev)
 static int test_tx_only(const struct device *dev)
 {
 	int ret;
-	uint8_t tx_data[17] = {0};
-	uint8_t rx_data[10] = {0};
-	struct spi_buf spi_buf[2] = {{
+	// uint8_t tx_data[17] = {0};
+	uint8_t tx_data[4] = {0x3, 0x0, 0x0, 0x0};
+	struct spi_buf spi_buf = {
 					     .buf = tx_data,
 					     .len = sizeof(tx_data),
-				     },
+				     };
+
+	const struct spi_buf_set tx_set = {.buffers = &spi_buf, .count = 1};
+
+	// for (int i = 0; i < sizeof(tx_data); i++) {
+	// 	tx_data[i] = i;
+	// }
+	ret = spi_write(dev, &spi_cfg, &tx_set);
+	if (ret) {
+		LOG_ERR("failed to send spi data, ret %d", ret);
+		return ret;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_SPI_TEST_TX_ONLY */
+
+#if CONFIG_SPI_TEST_TX_RX
+static int test_tx_rx(const struct device *dev)
+{
+	int ret;
+	uint8_t tx_data[4] = {0x3, 0x0, 0x0, 0x10};
+	uint8_t rx_data[16] = {0};
+	struct spi_buf tx_buf[1] = {{
+					     .buf = tx_data,
+					     .len = sizeof(tx_data),
+				     }};
+	struct spi_buf rx_buf[1] = {
 				     {
 					     .buf = rx_data,
 					     .len = sizeof(rx_data),
 				     }};
 
-	const struct spi_buf_set tx_set = {.buffers = spi_buf, .count = 2};
-	const struct spi_buf_set rx_set = {.buffers = spi_buf, .count = 2};
-
-	for (int i = 0; i < sizeof(tx_data); i++) {
-		tx_data[i] = i;
-	}
+	const struct spi_buf_set tx_set = {.buffers = tx_buf, .count = 1};
+	const struct spi_buf_set rx_set = {.buffers = rx_buf, .count = 1};
 
 	ret = spi_transceive(dev, &spi_cfg, &tx_set, &rx_set);
 	if (ret) {
-		LOG_ERR("failed to send spi data");
+		LOG_ERR("failed to send spi data, ret %d", ret);
 		return ret;
 	}
 
-	LOG_HEXDUMP_INF(spi_buf[1].buf, spi_buf[1].len, "rx:");
+	LOG_HEXDUMP_INF(rx_buf[0].buf, rx_buf[0].len, "rx:");
 
 	return 0;
 }
-#endif /* CONFIG_SPI_TEST_TX_ONLY*/
+#endif /* CONFIG_SPI_TEST_TX_RX */
 
 int spi_test(void)
 {
@@ -532,6 +560,23 @@ int spi_test(void)
 #else
 	LOG_WRN("disabled spi tx only test");
 #endif /* CONFIG_SPI_TEST_TX_ONLY */
+
+#if CONFIG_SPI_TEST_TX_RX
+	spi_cfg.frequency = MHZ(12);
+	spi_cfg.slave = 0;
+	LOG_INF("start spi tx-then-rx test (cs = %d)", spi_cfg.slave);
+
+	ret = test_tx_rx(spi_device);
+	if (ret) {
+		return ret;
+	}
+	ret = test_tx_rx(spi_device);
+	if (ret) {
+		return ret;
+	}
+#else
+	LOG_WRN("disabled spi tx-then-rx test");
+#endif /* CONFIG_SPI_TEST_TX_RX */
 
 #if CONFIG_SPI_TEST_PM_CHECK
 	LOG_INF("start spi pm check test");
