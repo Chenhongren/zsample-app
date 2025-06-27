@@ -87,6 +87,13 @@ config SPI_TEST_TX_ONLY
 	help
 	  Enable SPI TX test.
 
+config SPI_TEST_TX_RX
+	bool "SPI TX Then RX Test"
+	depends on SPI_TEST
+	default y
+	help
+	  Enable SPI TX then RX test.
+
 config SPI_TEST_PM_CHECK
 	bool "SPI PM Check Test"
 	depends on SPI_TEST

@@ -48,6 +48,7 @@ static void spi_async_call_cb(void *p1, void *p2, void *p3)
 			/* Reinitializing for next call */
 			evt->signal->signaled = 0U;
 			evt->state = K_POLL_STATE_NOT_READY;
+			return;
 		}
 	}
 }
@@ -57,17 +58,21 @@ static int read_jedec_id_async(const struct device *dev)
 	int ret;
 	uint8_t tx_data[1] = {SPI_NOR_CMD_RDID};
 	uint8_t rx_data[3] = {0};
-	struct spi_buf spi_buf[2] = {{
-					     .buf = tx_data,
-					     .len = sizeof(tx_data),
-				     },
-				     {
-					     .buf = rx_data,
-					     .len = sizeof(rx_data),
-				     }};
+	struct spi_buf tx_buf[1] = {{
+		.buf = tx_data,
+		.len = sizeof(tx_data),
+	}};
+	struct spi_buf rx_buf[2] = {{
+					    .buf = NULL,
+					    .len = sizeof(tx_data),
+				    },
+				    {
+					    .buf = rx_data,
+					    .len = sizeof(rx_data),
+				    }};
 
-	const struct spi_buf_set tx_set = {.buffers = spi_buf, .count = 2};
-	const struct spi_buf_set rx_set = {.buffers = spi_buf, .count = 2};
+	const struct spi_buf_set tx_set = {.buffers = tx_buf, .count = 1};
+	const struct spi_buf_set rx_set = {.buffers = rx_buf, .count = 2};
 
 	ret = spi_transceive_signal(dev, &spi_cfg, &tx_set, &rx_set, &async_sig);
 	if (ret) {
@@ -77,7 +82,7 @@ static int read_jedec_id_async(const struct device *dev)
 
 	k_sem_take(&caller, K_FOREVER);
 
-	LOG_HEXDUMP_INF(spi_buf[1].buf, spi_buf[1].len, "jedec id:");
+	LOG_HEXDUMP_INF(rx_buf[1].buf, rx_buf[1].len, "jedec id:");
 
 	return 0;
 }
@@ -301,13 +306,12 @@ static int quad_mode_test(const struct device *dev)
 #endif /* CONFIG_SPI_TEST_QUAD_MODE */
 
 #if CONFIG_SPI_TEST_RX_ONLY
-static int test_rx_only(const struct device *dev)
+static int test_rx_only(const struct device *dev, uint8_t *rx_data, const size_t rx_len)
 {
 	int ret;
-	uint8_t rx_data[16] = {0};
 	struct spi_buf spi_buf[1] = {{
 		.buf = rx_data,
-		.len = sizeof(rx_data),
+		.len = rx_len,
 	}};
 
 	const struct spi_buf_set rx_set = {.buffers = spi_buf, .count = 1};
@@ -322,41 +326,110 @@ static int test_rx_only(const struct device *dev)
 
 	return 0;
 }
-#endif /* CONFIG_SPI_TEST_RX_ONLY*/
 
-#if CONFIG_SPI_TEST_TX_ONLY
-static int test_tx_only(const struct device *dev)
+static int test_multi_rx(const struct device *dev)
 {
 	int ret;
-	uint8_t tx_data[17] = {0};
-	uint8_t rx_data[10] = {0};
+	uint8_t rx_data[16] = {0xFF};
+	uint8_t rx_data_2[16] = {0xFF};
 	struct spi_buf spi_buf[2] = {{
-					     .buf = tx_data,
-					     .len = sizeof(tx_data),
-				     },
-				     {
 					     .buf = rx_data,
 					     .len = sizeof(rx_data),
+				     },
+				     {
+					     .buf = rx_data_2,
+					     .len = sizeof(rx_data_2),
 				     }};
 
-	const struct spi_buf_set tx_set = {.buffers = spi_buf, .count = 2};
 	const struct spi_buf_set rx_set = {.buffers = spi_buf, .count = 2};
 
-	for (int i = 0; i < sizeof(tx_data); i++) {
-		tx_data[i] = i;
-	}
-
-	ret = spi_transceive(dev, &spi_cfg, &tx_set, &rx_set);
+	ret = spi_read(dev, &spi_cfg, &rx_set);
 	if (ret) {
-		LOG_ERR("failed to send spi data");
+		LOG_ERR("failed to read spi data");
 		return ret;
 	}
 
-	LOG_HEXDUMP_INF(spi_buf[1].buf, spi_buf[1].len, "rx:");
+	LOG_HEXDUMP_INF(spi_buf[0].buf, spi_buf[0].len, "rx 0:");
+	LOG_HEXDUMP_INF(spi_buf[1].buf, spi_buf[1].len, "rx 1:");
 
 	return 0;
 }
-#endif /* CONFIG_SPI_TEST_TX_ONLY*/
+#endif /* CONFIG_SPI_TEST_RX_ONLY*/
+
+#if CONFIG_SPI_TEST_TX_ONLY
+static int test_tx_only(const struct device *dev, uint8_t *tx_data, const size_t tx_len)
+{
+	int ret;
+	struct spi_buf spi_buf = {
+		.buf = tx_data,
+		.len = tx_len,
+	};
+
+	const struct spi_buf_set tx_set = {.buffers = &spi_buf, .count = 1};
+
+	ret = spi_write(dev, &spi_cfg, &tx_set);
+	if (ret) {
+		LOG_ERR("failed to send spi data, ret %d", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int test_multi_tx(const struct device *dev)
+{
+	int ret;
+	uint8_t tx_data[4] = {0x2, 0x0, 0x0, 0x10};
+	uint8_t tx_data_1[4] = {0x10, 0x11, 0x12, 0x13};
+	struct spi_buf tx_buf[2] = {{
+					    .buf = tx_data,
+					    .len = sizeof(tx_data),
+				    },
+				    {
+					    .buf = tx_data_1,
+					    .len = sizeof(tx_data_1),
+				    }};
+
+	const struct spi_buf_set tx_set = {.buffers = tx_buf, .count = 2};
+
+	ret = spi_write(dev, &spi_cfg, &tx_set);
+	if (ret) {
+		LOG_ERR("failed to send spi data, ret %d", ret);
+		return ret;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_SPI_TEST_TX_ONLY */
+
+#if CONFIG_SPI_TEST_TX_RX
+static int test_tx_rx(const struct device *dev, uint8_t *tx_data, const size_t tx_len,
+		      uint8_t *rx_data, const size_t rx_len)
+{
+	int ret;
+	struct spi_buf tx_buf[1] = {{
+		.buf = tx_data,
+		.len = tx_len,
+	}};
+	struct spi_buf rx_buf[1] = {{
+		.buf = rx_data,
+		.len = rx_len,
+	}};
+
+	const struct spi_buf_set tx_set = {.buffers = tx_buf, .count = 1};
+	const struct spi_buf_set rx_set = {.buffers = rx_buf, .count = 1};
+
+	ret = spi_transceive(dev, &spi_cfg, &tx_set, &rx_set);
+	if (ret) {
+		LOG_ERR("failed to send spi data, ret %d", ret);
+		return ret;
+	}
+
+	LOG_HEXDUMP_INF(rx_buf[0].buf, rx_buf[0].len, "rx:");
+
+	return 0;
+}
+#endif /* CONFIG_SPI_TEST_TX_RX */
 
 int spi_test(void)
 {
@@ -504,6 +577,19 @@ int spi_test(void)
 		LOG_ERR("failed to read jedec id, ret %d", ret);
 		return ret;
 	}
+
+	/* for IT51xxx test, driver need to switch to pio mode,
+	 * since fifo mode is supported only under spi mode 0.
+	 */
+	// uint8_t line_mode_4_tx_data[4] = {0x3, 0x0, 0x0, 0x10};
+	// uint8_t line_mode_rx_data[8] = {0};
+
+	// ret = test_tx_rx(spi_device, line_mode_4_tx_data, sizeof(line_mode_4_tx_data),
+	// 		 line_mode_rx_data, 8);
+	// if (ret) {
+	// 	return ret;
+	// }
+
 	spi_cfg.operation &= ~(SPI_MODE_CPHA | SPI_MODE_CPOL);
 #else
 	LOG_WRN("disabled spi line mode test");
@@ -513,7 +599,25 @@ int spi_test(void)
 	spi_cfg.slave = 0;
 	LOG_INF("start spi rx only test (cs = %d)", spi_cfg.slave);
 
-	ret = test_rx_only(spi_device);
+	uint8_t rx_3_rx_data[3] = {0x0, 0x1, 0x2};
+	uint8_t rx_4_rx_data[4] = {0x3, 0x4, 0x5, 0x6};
+	uint8_t rx_8_rx_data[8] = {0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe};
+	ret = test_rx_only(spi_device, rx_3_rx_data, sizeof(rx_3_rx_data));
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_rx_only(spi_device, rx_8_rx_data, sizeof(rx_8_rx_data));
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_rx_only(spi_device, rx_4_rx_data, sizeof(rx_4_rx_data));
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_multi_rx(spi_device);
 	if (ret) {
 		return ret;
 	}
@@ -525,13 +629,78 @@ int spi_test(void)
 	spi_cfg.slave = 0;
 	LOG_INF("start spi tx only test (cs = %d)", spi_cfg.slave);
 
-	ret = test_tx_only(spi_device);
+	uint8_t tx_3_tx_data[3] = {0x0, 0x1, 0x2};
+	uint8_t tx_4_tx_data[4] = {0x3, 0x4, 0x5, 0x6};
+	uint8_t tx_8_tx_data[8] = {0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe};
+	ret = test_tx_only(spi_device, tx_3_tx_data, sizeof(tx_3_tx_data));
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_tx_only(spi_device, tx_4_tx_data, sizeof(tx_4_tx_data));
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_tx_only(spi_device, tx_8_tx_data, sizeof(tx_8_tx_data));
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_multi_tx(spi_device);
 	if (ret) {
 		return ret;
 	}
 #else
 	LOG_WRN("disabled spi tx only test");
 #endif /* CONFIG_SPI_TEST_TX_ONLY */
+
+#if CONFIG_SPI_TEST_TX_RX
+	spi_cfg.frequency = MHZ(12);
+	spi_cfg.slave = 0;
+	LOG_INF("start spi tx-then-rx test (cs = %d)", spi_cfg.slave);
+
+	uint8_t txrx_3_tx_data[3] = {0x0, 0x1, 0x2};
+	uint8_t txrx_4_tx_data[4] = {0x3, 0x0, 0x0, 0x10};
+	uint8_t txrx_8_tx_data[8] = {0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7};
+	uint8_t rx_data[8] = {0};
+	ret = test_tx_rx(spi_device, txrx_3_tx_data, sizeof(txrx_3_tx_data), rx_data, 3);
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_tx_rx(spi_device, txrx_3_tx_data, sizeof(txrx_3_tx_data), rx_data, 8);
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_tx_rx(spi_device, txrx_3_tx_data, sizeof(txrx_3_tx_data), rx_data, 4);
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_tx_rx(spi_device, txrx_8_tx_data, sizeof(txrx_8_tx_data), rx_data, 8);
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_tx_rx(spi_device, txrx_8_tx_data, sizeof(txrx_8_tx_data), rx_data, 4);
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_tx_rx(spi_device, txrx_4_tx_data, sizeof(txrx_4_tx_data), rx_data, 8);
+	if (ret) {
+		return ret;
+	}
+
+	ret = test_tx_rx(spi_device, txrx_4_tx_data, sizeof(txrx_4_tx_data), rx_data, 6);
+	if (ret) {
+		return ret;
+	}
+#else
+	LOG_WRN("disabled spi tx-then-rx test");
+#endif /* CONFIG_SPI_TEST_TX_RX */
 
 #if CONFIG_SPI_TEST_PM_CHECK
 	LOG_INF("start spi pm check test");

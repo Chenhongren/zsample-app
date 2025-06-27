@@ -22,6 +22,11 @@
 #define SPI_NOR_CMD_2READ 0xBB /* Read data (1-2-2) */
 #define SPI_NOR_CMD_4READ 0xEB /* Read data (1-4-4) */
 
+/* sync upstream change(pr 88467) and add label LAGACY
+ * https://github.com/zephyrproject-rtos/zephyr/commit/1fdb43cf279d03b40da1eaaceb58b33b4a060aa8
+ */
+#define LEGACY 0
+
 /* Indicates that an access command is performing a write.  If not
  * provided access is a read.
  */
@@ -32,20 +37,41 @@ static int spi_nor_access(const struct device *const dev, struct spi_config spi_
 {
 	bool is_write = (access & NOR_ACCESS_WRITE) != 0U;
 	uint8_t buf[5] = {0};
+#if LEGACY
 	struct spi_buf spi_buf[2] = {{
 					     .buf = buf,
 					     .len = 1,
 				     },
 				     {.buf = data, .len = length}};
-
+#else
+	struct spi_buf spi_buf_tx[2] = {{
+						.buf = buf,
+						.len = 1,
+					},
+					{.buf = data, .len = length}};
+	struct spi_buf spi_buf_rx[2] = {{
+						.buf = NULL,
+						.len = 1,
+					},
+					{.buf = data, .len = length}};
+#endif /* LEGACY */
 	buf[0] = opcode;
 	const struct spi_buf_set tx_set = {
+#if LEGACY
 		.buffers = spi_buf,
 		.count = (length != 0) ? 2 : 1,
+#else
+		.buffers = spi_buf_tx,
+		.count = (is_write && length != 0) ? 2 : 1,
+#endif /* LEGACY */
 	};
 
 	const struct spi_buf_set rx_set = {
+#if LEGACY
 		.buffers = spi_buf,
+#else
+		.buffers = spi_buf_rx,
+#endif /* LEGACY */
 		.count = 2,
 	};
 
