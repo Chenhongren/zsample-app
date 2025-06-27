@@ -12,8 +12,11 @@
 
 &spi0 {
 	status = "okay";
-	cs-gpios = <&gpioe 1 GPIO_ACTIVE_LOW>,
-		    <&gpiob 7 GPIO_ACTIVE_LOW>;
+	/* fifo mode is supported under level-triggered mode,
+	 * and edge-triggered mode is used in pio mode.
+	 */
+	interrupts = <IT51XXX_IRQ_SPI IRQ_TYPE_LEVEL_HIGH>;
+	/* interrupts = <IT51XXX_IRQ_SPI IRQ_TYPE_EDGE_RISING>; */
 
 	pinctrl-0 = <&ssce0_gpj7_default
 		     &ssce1_gph7_default
@@ -28,6 +31,7 @@
 		spi-max-frequency = <12000000>;
 		jedec-id = [c2 23 15];
 		size = <0x1000000>; // 16Mb
+		use-fast-read;
 	};
 
 	mx25l10: mx25l1006e@1 {
