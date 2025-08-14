@@ -9,6 +9,6 @@
 #define PROJECT_NAME     "MARS 5"
 #define FIRMWARE_VERSION "0.1.0"
 
-#define PLAT_EEPROM_PRJ_INFO_ADDR 0x1000
+#define PLAT_FLASH_PRJ_INFO_ADDR 0x1000
 
 #endif /* PLAT_INFO_H_ */

@@ -49,10 +49,10 @@ int store_project_info(void)
 	fru.firmware_version.len = strlen(FIRMWARE_VERSION);
 	memcpy(fru.firmware_version.data, FIRMWARE_VERSION, fru.firmware_version.len);
 
-	ret = flash_update(fru_dev, PLAT_EEPROM_PRJ_INFO_ADDR, &fru, sizeof(fru));
+	ret = flash_update(fru_dev, PLAT_FLASH_PRJ_INFO_ADDR, &fru, sizeof(fru));
 	if (!ret) {
 		LOG_INF("store platform information at EEPROM address 0x%x",
-			PLAT_EEPROM_PRJ_INFO_ADDR);
+			PLAT_FLASH_PRJ_INFO_ADDR);
 	} else if (ret == -EALREADY) {
 		LOG_INF("platform information has already been set");
 		ret = 0;
