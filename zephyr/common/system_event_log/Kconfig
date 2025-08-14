@@ -4,3 +4,23 @@
 module = SYSTEM_EVENT_LOG
 module-str = system-event-log
 source "subsys/logging/Kconfig.template.log_config"
+
+config SYS_EVT_LOG_PRIORITY
+	int "system event log thread priority"
+	default 9
+	help
+	  System event log thread priority.
+
+config SYS_EVT_LOG_STACK_SIZE
+	int "the stack size of system event log thread"
+	default 512
+	help
+	  The stack size of system event log thread.
+
+config SYS_EVT_LOG_MAX_RECORD
+	int "the maximum number of system event logs"
+	default 10
+	range 1 256
+	help
+	  the maximum number of system event logs that
+	  can be recorded.
