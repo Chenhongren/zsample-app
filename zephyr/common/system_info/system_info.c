@@ -8,11 +8,28 @@
 #include <zephyr/drivers/flash.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/shell/shell.h>
 
 #include "flash.h"
 #include "plat_info.h"
 
 LOG_MODULE_REGISTER(system_info, CONFIG_SYSTEM_INFO_LOG_LEVEL);
+
+enum platform_info_index {
+	PLAT_INFO_ID_PRJ_NAME = 0,
+	PLAT_INFO_ID_FW_VERSION,
+	PLAT_INFO_ID_MAX,
+};
+
+static const char *const platform_label[] = {
+	[PLAT_INFO_ID_PRJ_NAME] = "project name",
+	[PLAT_INFO_ID_FW_VERSION] = "firmware version",
+};
+
+static const char *const platform_info[] = {
+	[PLAT_INFO_ID_PRJ_NAME] = PROJECT_NAME,
+	[PLAT_INFO_ID_FW_VERSION] = FIRMWARE_VERSION,
+};
 
 struct entry {
 	uint8_t len;
@@ -35,8 +52,8 @@ int store_project_info(void)
 		return -ENODEV;
 	}
 
-	if (strlen(PROJECT_NAME) > sizeof(fru.project_name.data) ||
-	    strlen(FIRMWARE_VERSION) > sizeof(fru.firmware_version.data)) {
+	if (strlen(platform_info[PLAT_INFO_ID_PRJ_NAME]) > sizeof(fru.project_name.data) ||
+	    strlen(platform_info[PLAT_INFO_ID_FW_VERSION]) > sizeof(fru.firmware_version.data)) {
 		LOG_ERR("project name or firmware version string is oversize");
 		return -ENOSPC;
 	}
@@ -44,10 +61,11 @@ int store_project_info(void)
 	memset(fru.project_name.data, 0xff, sizeof(fru.project_name.data));
 	memset(fru.firmware_version.data, 0xff, sizeof(fru.firmware_version.data));
 
-	fru.project_name.len = strlen(PROJECT_NAME);
-	memcpy(fru.project_name.data, PROJECT_NAME, fru.project_name.len);
-	fru.firmware_version.len = strlen(FIRMWARE_VERSION);
-	memcpy(fru.firmware_version.data, FIRMWARE_VERSION, fru.firmware_version.len);
+	fru.project_name.len = strlen(platform_info[PLAT_INFO_ID_PRJ_NAME]);
+	memcpy(fru.project_name.data, platform_info[PLAT_INFO_ID_PRJ_NAME], fru.project_name.len);
+	fru.firmware_version.len = strlen(platform_info[PLAT_INFO_ID_FW_VERSION]);
+	memcpy(fru.firmware_version.data, platform_info[PLAT_INFO_ID_FW_VERSION],
+	       fru.firmware_version.len);
 
 	ret = flash_update(fru_dev, PLAT_FLASH_PRJ_INFO_ADDR, &fru, sizeof(fru));
 	if (!ret) {
@@ -62,3 +80,43 @@ int store_project_info(void)
 
 	return ret;
 }
+
+/* platform info [<id>] */
+static int cmd_platform_info(const struct shell *sh, size_t argc, char **argv)
+{
+	switch (argc) {
+	case 1:
+		shell_print(sh, "Platform Info:");
+		for (uint8_t i = 0; i < PLAT_INFO_ID_MAX; i++) {
+			shell_print(sh, "\t<ID: %d> %s: %s", i, platform_label[i],
+				    platform_info[i]);
+		}
+		break;
+	case 2:
+		char *endptr;
+		int id;
+
+		id = strtol(argv[1], &endptr, 10);
+		if (*endptr != '\0' || id >= PLAT_INFO_ID_MAX) {
+			shell_error(sh, "invalid id(%s)", argv[1]);
+			return -EINVAL;
+		}
+		shell_print(sh, "Platform Info (ID: %d) %s: %s", id, platform_label[id],
+			    platform_info[id]);
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_platform_cmds,
+			       SHELL_CMD_ARG(info, NULL,
+					     "Print platform infomation\n"
+					     "Usage: info [<id>]",
+					     cmd_platform_info, 1, 1),
+			       SHELL_SUBCMD_SET_END /* Array terminated. */
+);
+
+SHELL_CMD_REGISTER(platform, &sub_platform_cmds, "platform infomation commands", NULL);
