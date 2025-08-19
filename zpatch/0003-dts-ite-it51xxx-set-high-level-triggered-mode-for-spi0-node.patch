@@ -1,0 +1,33 @@
+From 11167f863b2613ddad03da376d3db5a8ccb51f34 Mon Sep 17 00:00:00 2001
+From: Ren Chen <Ren.Chen@ite.com.tw>
+Date: Tue, 12 Aug 2025 16:32:15 +0800
+Subject: [PATCH 2/4] dts: ite: it51xxx: set high-level triggered mode for spi0
+ node
+
+This commit sets the interrupt mode to high-level
+triggered, as fifo mode is enabled by default
+(CONFIG_SPI_ITE_IT51XXX_FIFO_MODE=y) and the fifo
+mode only supports high-level triggered.
+
+Change-Id: I0320cb33c122ace1b2658f5a8d75de5f5c79e3de
+Signed-off-by: Ren Chen <Ren.Chen@ite.com.tw>
+---
+ dts/riscv/ite/it51xxx.dtsi | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dts/riscv/ite/it51xxx.dtsi b/dts/riscv/ite/it51xxx.dtsi
+index 9b19d069962..7bff57bd3d5 100644
+--- a/dts/riscv/ite/it51xxx.dtsi
++++ b/dts/riscv/ite/it51xxx.dtsi
+@@ -1393,7 +1393,7 @@
+ 			compatible = "ite,it51xxx-spi";
+ 			reg = <0x00f02600 0x24>;
+ 			interrupt-parent = <&intc>;
+-			interrupts = <IT51XXX_IRQ_SPI IRQ_TYPE_EDGE_RISING>;
++			interrupts = <IT51XXX_IRQ_SPI IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&ecpm IT51XXX_ECPM_CGCTRL3R_OFF BIT(1)>;
+ 			status = "disabled";
+ 		};
+-- 
+2.34.1
+

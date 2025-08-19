@@ -1,0 +1,69 @@
+From e1a4b5a1c6cb952c253eadec3cc8990c874b9fbc Mon Sep 17 00:00:00 2001
+From: Ren Chen <Ren.Chen@ite.com.tw>
+Date: Wed, 6 Aug 2025 16:52:56 +0800
+Subject: [PATCH 1/4] driver: spi: it51xxx: enable spi clock only when spi
+ transaction
+
+This commit disables spi clock during idle to reduce power
+consumption.
+
+Tested with: reduce current cons. by around 0.08mA on it515xx_evb
+
+Change-Id: I1c78f919f0d5764b10c585fd113932c77ca59021
+Signed-off-by: Ren Chen <Ren.Chen@ite.com.tw>
+---
+ drivers/spi/spi_it51xxx.c | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/spi/spi_it51xxx.c b/drivers/spi/spi_it51xxx.c
+index 4cf4f2438f7..2435ff55ac6 100644
+--- a/drivers/spi/spi_it51xxx.c
++++ b/drivers/spi/spi_it51xxx.c
+@@ -500,6 +500,7 @@ static int transceive(const struct device *dev, const struct spi_config *config,
+ 		      const struct spi_buf_set *tx_bufs, const struct spi_buf_set *rx_bufs,
+ 		      bool asynchronous, spi_callback_t cb, void *userdata)
+ {
++	const struct spi_it51xxx_config *cfg = dev->config;
+ 	struct spi_it51xxx_data *data = dev->data;
+ 	struct spi_context *ctx = &data->ctx;
+ 	int ret;
+@@ -512,6 +513,12 @@ static int transceive(const struct device *dev, const struct spi_config *config,
+ 		goto out;
+ 	}
+ 
++	ret = clock_control_on(cfg->clk_dev, (clock_control_subsys_t *)&cfg->clk_cfg);
++	if (ret) {
++		LOG_ERR("failed to turn on spi clock %d", ret);
++		goto out;
++	}
++
+ 	spi_context_buffers_setup(ctx, tx_bufs, rx_bufs, 1);
+ 
+ #ifdef CONFIG_SPI_ITE_IT51XXX_FIFO_MODE
+@@ -541,6 +548,10 @@ static int transceive(const struct device *dev, const struct spi_config *config,
+ #endif /* CONFIG_SPI_ITE_IT51XXX_FIFO_MODE */
+ 	pm_policy_state_lock_put(PM_STATE_STANDBY, PM_ALL_SUBSTATES);
+ 
++	ret = clock_control_off(cfg->clk_dev, (clock_control_subsys_t *)&cfg->clk_cfg);
++	if (ret) {
++		LOG_ERR("failed to turn off spi clock %d", ret);
++	}
+ out:
+ 	spi_context_release(ctx, ret);
+ 
+@@ -714,12 +725,6 @@ static int spi_it51xxx_init(const struct device *dev)
+ 		return ret;
+ 	}
+ 
+-	ret = clock_control_on(cfg->clk_dev, (clock_control_subsys_t *)&cfg->clk_cfg);
+-	if (ret) {
+-		LOG_ERR("failed to turn on spi clock %d", ret);
+-		return ret;
+-	}
+-
+ #ifdef CONFIG_SPI_ITE_IT51XXX_FIFO_MODE
+ 	/* set fifo base address */
+ 	LOG_INF("fifo base address 0x%x", (uint32_t)&data->fifo_data);
+-- 
+2.34.1
+

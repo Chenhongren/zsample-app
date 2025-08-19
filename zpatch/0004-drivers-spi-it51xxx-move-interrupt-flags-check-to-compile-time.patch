@@ -1,0 +1,55 @@
+From 2fe4d1d5d0be35c4b84a10e7700dc5df2da19b2a Mon Sep 17 00:00:00 2001
+From: Ren Chen <Ren.Chen@ite.com.tw>
+Date: Wed, 13 Aug 2025 11:00:08 +0800
+Subject: [PATCH 3/4] drivers: spi: it51xxx: move interrupt flags check to
+ compile time
+
+as title.
+
+Change-Id: I9daa7bd82b4c5800591735e050fd53479d728c61
+Signed-off-by: Ren Chen <Ren.Chen@ite.com.tw>
+---
+ drivers/spi/spi_it51xxx.c | 19 +++++++++----------
+ 1 file changed, 9 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/spi/spi_it51xxx.c b/drivers/spi/spi_it51xxx.c
+index 2435ff55ac6..705c5c3af71 100644
+--- a/drivers/spi/spi_it51xxx.c
++++ b/drivers/spi/spi_it51xxx.c
+@@ -741,16 +741,6 @@ static int spi_it51xxx_init(const struct device *dev)
+ 	/* set fifo full interrupt */
+ 	sys_write8(FIFO_FULL_INT_STS, cfg->base + SPI0E_CTRL_4);
+ 	sys_write8(FIFO_FULL_INT_EN, cfg->base + SPI0E_CTRL_4);
+-
+-	if (cfg->irq_flags != IRQ_TYPE_LEVEL_HIGH) {
+-		LOG_ERR("fifo mode only supports level-high-triggered");
+-		return -ENOTSUP;
+-	}
+-#else
+-	if (cfg->irq_flags != IRQ_TYPE_EDGE_RISING) {
+-		LOG_ERR("pio mode only supports rising-edge-triggered");
+-		return -ENOTSUP;
+-	}
+ #endif /* CONFIG_SPI_ITE_IT51XXX_FIFO_MODE */
+ 
+ 	ite_intc_irq_polarity_set(cfg->irq_no, cfg->irq_flags);
+@@ -780,7 +770,16 @@ static DEVICE_API(spi, spi_it51xxx_driver_api) = {
+ #endif
+ };
+ 
++/* according to the it51xxx spi hardware design, high-level triggering
++ * is supported in fifo mode, while pio mode supports rising-edge
++ * triggering.
++ */
++#define SUPPORTED_INTERRUPT_FLAG                                                                   \
++	(IS_ENABLED(CONFIG_SPI_ITE_IT51XXX_FIFO_MODE) ? IRQ_TYPE_LEVEL_HIGH : IRQ_TYPE_EDGE_RISING)
++
+ #define SPI_IT51XXX_INIT(n)                                                                        \
++	BUILD_ASSERT(DT_INST_IRQ(n, flags) == SUPPORTED_INTERRUPT_FLAG,                            \
++		     "unsupported interrupt flag");                                                \
+ 	PINCTRL_DT_INST_DEFINE(n);                                                                 \
+ 	static void it51xxx_spi_config_func_##n(void)                                              \
+ 	{                                                                                          \
+-- 
+2.34.1
+
