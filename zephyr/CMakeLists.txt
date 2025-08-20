@@ -6,9 +6,6 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(app)
 
-add_subdirectory(lib)
 add_subdirectory(common)
 add_subdirectory(device)
 add_subdirectory(program)
-
-zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)
