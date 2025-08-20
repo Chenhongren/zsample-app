@@ -9,6 +9,10 @@
 	aliases {
 		fru-flash = &mx25r16;
 	};
+
+	chosen {
+		keyboard-device = &kbd;
+	};
 };
 
 &spi0 {
@@ -57,4 +61,20 @@
 	i3c-od-scl-hz = <400000>;
 	i2c-scl-hz = <400000>;
 	i2c-scl-hddat = <2>;
+};
+
+&kbd {
+	col-size = <18>;
+
+	kso16-gpio {
+		compatible = "ite,col-gpio-drive";
+		col-num = <16>;
+		col-gpios = <&gpioa 0 GPIO_ACTIVE_LOW>;
+	};
+
+	kso17-gpio {
+		compatible = "ite,col-gpio-drive";
+		col-num = <17>;
+		col-gpios = <&gpioa 1 GPIO_ACTIVE_LOW>;
+	};
 };
