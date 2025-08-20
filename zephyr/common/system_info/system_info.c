@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 
+#include <zephyr/drivers/hwinfo.h>
 #include <zephyr/drivers/flash.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -15,20 +16,27 @@
 
 LOG_MODULE_REGISTER(system_info, CONFIG_SYSTEM_INFO_LOG_LEVEL);
 
+#define SOC_INFO_MAX_LENGTH 32 /* 16 bytes * 2 */
+
 enum platform_info_index {
 	PLAT_INFO_ID_PRJ_NAME = 0,
 	PLAT_INFO_ID_FW_VERSION,
+	PLAT_INFO_ID_SOC_INFO,
 	PLAT_INFO_ID_MAX,
 };
 
 static const char *const platform_label[] = {
 	[PLAT_INFO_ID_PRJ_NAME] = "project name",
 	[PLAT_INFO_ID_FW_VERSION] = "firmware version",
+	[PLAT_INFO_ID_SOC_INFO] = "soc info",
 };
 
-static const char *const platform_info[] = {
+static char soc_info_buffer[SOC_INFO_MAX_LENGTH] = "Undefined";
+
+static char *platform_info[] = {
 	[PLAT_INFO_ID_PRJ_NAME] = PROJECT_NAME,
 	[PLAT_INFO_ID_FW_VERSION] = FIRMWARE_VERSION,
+	[PLAT_INFO_ID_SOC_INFO] = soc_info_buffer,
 };
 
 struct entry {
@@ -36,16 +44,49 @@ struct entry {
 	uint8_t data[63];
 } __packed;
 
-struct eeprom_layout {
+struct flash_layout {
 	struct entry project_name;
 	struct entry firmware_version;
+	struct entry soc_info;
 };
+
+static int update_soc_info(void)
+{
+	uint8_t dev_id[SOC_INFO_MAX_LENGTH / 2];
+	int offset = 0;
+	ssize_t length;
+
+	length = hwinfo_get_device_id(dev_id, sizeof(dev_id));
+	if (length == -ENOSYS) {
+		LOG_ERR("unsupported hwinfo by hardware");
+		return -ENOSYS;
+	}
+	if (length < 0) {
+		LOG_ERR("failed to get device id, ret %d", length);
+		return length;
+	}
+
+	LOG_HEXDUMP_DBG(dev_id, length, "device id:");
+
+	for (int i = 0; i < length; i++) {
+		if (offset >= sizeof(soc_info_buffer) - 3) {
+			LOG_ERR("soc info string truncated due to limited buffer size");
+			return -ENOBUFS;
+		}
+		offset += snprintf(soc_info_buffer + offset, sizeof(soc_info_buffer) - offset,
+				   "%02x", dev_id[i]);
+	}
+
+	return 0;
+}
 
 int store_project_info(void)
 {
-	const struct device *fru_dev = DEVICE_DT_GET(DT_ALIAS(fru_eeprom));
-	struct eeprom_layout fru;
+	const struct device *fru_dev = DEVICE_DT_GET(DT_ALIAS(fru_flash));
+	struct flash_layout fru;
 	int ret;
+
+	update_soc_info();
 
 	if (!device_is_ready(fru_dev)) {
 		LOG_ERR("%s is not ready", fru_dev->name);
@@ -58,18 +99,19 @@ int store_project_info(void)
 		return -ENOSPC;
 	}
 
-	memset(fru.project_name.data, 0xff, sizeof(fru.project_name.data));
-	memset(fru.firmware_version.data, 0xff, sizeof(fru.firmware_version.data));
+	memset(&fru, 0xff, sizeof(fru));
 
 	fru.project_name.len = strlen(platform_info[PLAT_INFO_ID_PRJ_NAME]);
 	memcpy(fru.project_name.data, platform_info[PLAT_INFO_ID_PRJ_NAME], fru.project_name.len);
 	fru.firmware_version.len = strlen(platform_info[PLAT_INFO_ID_FW_VERSION]);
 	memcpy(fru.firmware_version.data, platform_info[PLAT_INFO_ID_FW_VERSION],
 	       fru.firmware_version.len);
+	fru.soc_info.len = strlen(platform_info[PLAT_INFO_ID_SOC_INFO]);
+	memcpy(fru.soc_info.data, platform_info[PLAT_INFO_ID_SOC_INFO], fru.soc_info.len);
 
 	ret = flash_update(fru_dev, PLAT_FLASH_PRJ_INFO_ADDR, &fru, sizeof(fru));
 	if (!ret) {
-		LOG_INF("store platform information at EEPROM address 0x%x",
+		LOG_INF("store platform information at flash address 0x%x",
 			PLAT_FLASH_PRJ_INFO_ADDR);
 	} else if (ret == -EALREADY) {
 		LOG_INF("platform information has already been set");

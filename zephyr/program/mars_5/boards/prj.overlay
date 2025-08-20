@@ -7,7 +7,7 @@
 
 / {
 	aliases {
-		fru-eeprom = &mx25r16;
+		fru-flash = &mx25r16;
 	};
 };
 
