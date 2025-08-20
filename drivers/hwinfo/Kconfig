@@ -1,0 +1,12 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+if HWINFO
+
+config HWINFO_MARS_5
+	bool "MARS 5 (IT51XXX) chip ID"
+	default y if SOC_IT51XXX
+	help
+	  Enable MARS 5 (ITE IT51XXX) hwinfo driver
+
+endif #HWINFO
