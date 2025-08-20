@@ -1,0 +1,15 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+if KEYCODE_DETECT
+
+config COL_GPIO_DRIVE
+	bool "GPIO driven column keyboard matrix hook"
+	depends on KEYCODE_DETECT
+	depends on DT_HAS_ITE_COL_GPIO_DRIVE_ENABLED
+	default y
+	select INPUT_KBD_DRIVE_COLUMN_HOOK
+	help
+	  Implemnt the hook to handle a keyboard matrix column using a GPIO.
+
+endif #KEYCODE_DETECT

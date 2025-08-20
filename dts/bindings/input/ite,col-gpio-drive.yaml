@@ -1,0 +1,41 @@
+# Copyright (c) 2025 ITE Corporation. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Keyboard matrix device GPIO column drive
+
+  This can be used to handle a specific keyboard matrix column using a GPIO.
+  Instantiate as a child node of the keyboard matrix device itself.
+
+  Example configuration:
+
+  &kbd {
+      ...
+      kso-gpio {
+          compatible = "ite,col-gpio-drive";
+          col-num = <16>;
+          col-gpios = <&gpioa 0 GPIO_ACTIVE_LOW>;
+      };
+  };
+
+compatible: "ite,col-gpio-drive"
+
+include: base.yaml
+
+properties:
+  col-num:
+    type: int
+    required: true
+    description: Column number to handle
+
+  col-gpios:
+    type: phandle-array
+    required: true
+    description: GPIO to use to handle the column
+
+  settle-time-us:
+    type: int
+    default: 30
+    description: |
+      Extra delay after changing the column state, note that this adds up to
+      the parent device settle-time-us.

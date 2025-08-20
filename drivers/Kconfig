@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 menu "Drivers"
+rsource "col_gpio_drive/Kconfig"
 rsource "hwinfo/Kconfig"
 rsource "ite_i3c/Kconfig"
 endmenu

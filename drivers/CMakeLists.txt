@@ -4,5 +4,6 @@
 # Out-of-tree drivers for custom classes
 add_subdirectory(hwinfo)
 
+add_subdirectory_ifdef(CONFIG_KEYCODE_DETECT col_gpio_drive)
 add_subdirectory_ifdef(CONFIG_ITE_I3C_SAMPLE ite_i3c)
 
