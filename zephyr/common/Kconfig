@@ -7,3 +7,4 @@ source "subsys/logging/Kconfig.template.log_config"
 
 rsource "system_event_log/Kconfig"
 rsource "system_info/Kconfig"
+rsource "keycode_detect/Kconfig"

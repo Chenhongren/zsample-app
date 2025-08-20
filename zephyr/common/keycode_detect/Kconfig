@@ -1,0 +1,25 @@
+# Copyright (c) 2025 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+module = KEYCODE_DETECT
+module-str = keycode-detect
+source "subsys/logging/Kconfig.template.log_config"
+
+config KEYCODE_DETECT
+	bool "enable keycode detect"
+	default n
+	select INPUT
+	help
+	  Enable keycode detect.
+
+if KEYCODE_DETECT
+config KEYCODE_DETECT_PRIORITY
+	int "keycode detect priority"
+	default 10
+	help
+	  Keycode detect priority.
+
+config INPUT_KBD_MATRIX
+	default y
+
+endif #KEYCODE_DETECT

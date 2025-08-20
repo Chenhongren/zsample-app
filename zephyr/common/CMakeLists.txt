@@ -15,3 +15,5 @@ target_sources(app PRIVATE ${COMMON_SRC})
 
 zephyr_include_directories(system_event_log)
 zephyr_include_directories(system_info)
+
+add_subdirectory(keycode_detect)
