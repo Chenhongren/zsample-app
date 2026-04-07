@@ -7,3 +7,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 if(DEFINED CONFIG_BOARD_MARS_5)
 	add_subdirectory(mars_5)
 endif()
+
+if(DEFINED CONFIG_BOARD_FAN_BOX)
+	add_subdirectory(fan_box)
+endif()

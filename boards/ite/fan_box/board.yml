@@ -1,0 +1,9 @@
+# Copyright (c) 2026 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+board:
+  name: fan_box
+  vendor: ite
+  full_name: Fan Box
+  socs:
+    - name: it82000bw

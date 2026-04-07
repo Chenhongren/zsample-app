@@ -1,0 +1,18 @@
+# Copyright (c) 2026 ITE Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+identifier: fan_box
+name: Fan Box
+type: mcu
+arch: riscv
+toolchain:
+  - zephyr
+ram: 128
+supported:
+  - flash
+  - gpio
+  - i2c
+  - pinctrl
+  - pm
+  - uart
+vendor: ite
