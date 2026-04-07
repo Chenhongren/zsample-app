@@ -50,7 +50,7 @@ struct flash_layout {
 	struct entry soc_info;
 };
 
-static int update_soc_info(void)
+static __maybe_unused int update_soc_info(void)
 {
 	uint8_t dev_id[SOC_INFO_MAX_LENGTH / 2];
 	int offset = 0;
@@ -82,6 +82,7 @@ static int update_soc_info(void)
 
 int store_project_info(void)
 {
+#if DT_NODE_HAS_STATUS(DT_ALIAS(fru_flash), okay)
 	const struct device *fru_dev = DEVICE_DT_GET(DT_ALIAS(fru_flash));
 	struct flash_layout fru;
 	int ret;
@@ -121,6 +122,11 @@ int store_project_info(void)
 	}
 
 	return ret;
+#else
+	LOG_WRN("fru storage disabled due to missing fru device");
+
+	return -ENOTSUP;
+#endif /* DT_NODE_HAS_STATUS(DT_ALIAS(fru_flash), okay) */
 }
 
 /* platform info [<id>] */
