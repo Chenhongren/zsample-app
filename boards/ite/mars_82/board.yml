@@ -4,5 +4,6 @@
 board:
   name: mars_82
   vendor: ite
+  full_name: Mars 82
   socs:
     - name: it82202ax

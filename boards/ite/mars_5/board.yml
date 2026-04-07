@@ -4,5 +4,6 @@
 board:
   name: mars_5
   vendor: ite
+  full_name: Mars 5
   socs:
     - name: it51526aw
