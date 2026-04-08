@@ -8,7 +8,7 @@
 #include <chip_chipregs.h>
 #include <string.h>
 
-struct it51xxx_device_id {
+struct ite_device_id {
 	uint8_t chip_version;
 	uint8_t chip_id[3];
 };
@@ -21,7 +21,7 @@ struct it51xxx_device_id {
 
 ssize_t z_impl_hwinfo_get_device_id(uint8_t *buffer, size_t length)
 {
-	struct it51xxx_device_id dev_id;
+	struct ite_device_id dev_id;
 
 	if (!buffer) {
 		return -EINVAL;

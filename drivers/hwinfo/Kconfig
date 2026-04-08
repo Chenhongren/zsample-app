@@ -3,10 +3,10 @@
 
 if HWINFO
 
-config HWINFO_MARS_5
-	bool "MARS 5 (IT51XXX) chip ID"
-	default y if SOC_IT51XXX
+config HWINFO_ITE
+	bool "ITE SoC Chip ID"
+	default y if SOC_IT51XXX || SOC_IT8XXX2
 	help
-	  Enable MARS 5 (ITE IT51XXX) hwinfo driver
+	  Enable ITE hwinfo driver
 
 endif #HWINFO
