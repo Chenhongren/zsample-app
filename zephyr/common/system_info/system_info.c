@@ -50,7 +50,7 @@ struct flash_layout {
 	struct entry soc_info;
 };
 
-static __maybe_unused int update_soc_info(void)
+static int update_soc_info(void)
 {
 	uint8_t dev_id[SOC_INFO_MAX_LENGTH / 2];
 	int offset = 0;
@@ -82,10 +82,13 @@ static __maybe_unused int update_soc_info(void)
 
 int store_project_info(void)
 {
+	int ret = -ENOTSUP;
+
+	update_soc_info();
+
 #if DT_NODE_HAS_STATUS(DT_ALIAS(fru_flash), okay)
 	const struct device *fru_dev = DEVICE_DT_GET(DT_ALIAS(fru_flash));
 	struct flash_layout fru;
-	int ret;
 
 	update_soc_info();
 
@@ -120,13 +123,11 @@ int store_project_info(void)
 	} else {
 		LOG_ERR("failed to update flash, ret %d", ret);
 	}
-
-	return ret;
 #else
 	LOG_WRN("fru storage disabled due to missing fru device");
-
-	return -ENOTSUP;
 #endif /* DT_NODE_HAS_STATUS(DT_ALIAS(fru_flash), okay) */
+
+	return ret;
 }
 
 /* platform info [<id>] */
@@ -161,10 +162,10 @@ static int cmd_platform_info(const struct shell *sh, size_t argc, char **argv)
 
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_platform_cmds,
 			       SHELL_CMD_ARG(info, NULL,
-					     "Print platform infomation\n"
+					     "Print platform information\n"
 					     "Usage: info [<id>]",
 					     cmd_platform_info, 1, 1),
 			       SHELL_SUBCMD_SET_END /* Array terminated. */
 );
 
-SHELL_CMD_REGISTER(platform, &sub_platform_cmds, "platform infomation commands", NULL);
+SHELL_CMD_REGISTER(platform, &sub_platform_cmds, "platform information commands", NULL);
