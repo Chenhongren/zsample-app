@@ -6,7 +6,12 @@
 #include <stdlib.h>
 
 #include <zephyr/drivers/hwinfo.h>
+#if CONFIG_SYSTEM_INFO_FRU_DEVICE_EEPROM
+#include <zephyr/drivers/eeprom.h>
+#endif /* CONFIG_SYSTEM_INFO_FRU_DEVICE_EEPROM */
+#if CONFIG_SYSTEM_INFO_FRU_DEVICE_FLASH
 #include <zephyr/drivers/flash.h>
+#endif /* CONFIG_SYSTEM_INFO_FRU_DEVICE_FLASH */
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/shell/shell.h>
@@ -80,38 +85,47 @@ static int update_soc_info(void)
 	return 0;
 }
 
+static int prepare_fru_data(struct flash_layout *fru)
+{
+	if (strlen(platform_info[PLAT_INFO_ID_PRJ_NAME]) > sizeof(fru->project_name.data) ||
+	    strlen(platform_info[PLAT_INFO_ID_FW_VERSION]) > sizeof(fru->firmware_version.data)) {
+		LOG_ERR("project name or firmware version string is oversize");
+		return -ENOSPC;
+	}
+
+	memset(fru, 0xff, sizeof(struct flash_layout));
+
+	fru->project_name.len = strlen(platform_info[PLAT_INFO_ID_PRJ_NAME]);
+	memcpy(fru->project_name.data, platform_info[PLAT_INFO_ID_PRJ_NAME], fru->project_name.len);
+	fru->firmware_version.len = strlen(platform_info[PLAT_INFO_ID_FW_VERSION]);
+	memcpy(fru->firmware_version.data, platform_info[PLAT_INFO_ID_FW_VERSION],
+	       fru->firmware_version.len);
+	fru->soc_info.len = strlen(platform_info[PLAT_INFO_ID_SOC_INFO]);
+	memcpy(fru->soc_info.data, platform_info[PLAT_INFO_ID_SOC_INFO], fru->soc_info.len);
+
+	return 0;
+}
+
 int store_project_info(void)
 {
-	int ret = -ENOTSUP;
-
-	update_soc_info();
-
-#if DT_NODE_HAS_STATUS(DT_ALIAS(fru_flash), okay)
-	const struct device *fru_dev = DEVICE_DT_GET(DT_ALIAS(fru_flash));
+	int ret;
 	struct flash_layout fru;
+	const struct device *fru_dev;
 
 	update_soc_info();
+
+	ret = prepare_fru_data(&fru);
+	if (ret) {
+		return ret;
+	}
+
+#if CONFIG_SYSTEM_INFO_FRU_DEVICE_FLASH
+	fru_dev = DEVICE_DT_GET(DT_ALIAS(fru_flash));
 
 	if (!device_is_ready(fru_dev)) {
 		LOG_ERR("%s is not ready", fru_dev->name);
 		return -ENODEV;
 	}
-
-	if (strlen(platform_info[PLAT_INFO_ID_PRJ_NAME]) > sizeof(fru.project_name.data) ||
-	    strlen(platform_info[PLAT_INFO_ID_FW_VERSION]) > sizeof(fru.firmware_version.data)) {
-		LOG_ERR("project name or firmware version string is oversize");
-		return -ENOSPC;
-	}
-
-	memset(&fru, 0xff, sizeof(fru));
-
-	fru.project_name.len = strlen(platform_info[PLAT_INFO_ID_PRJ_NAME]);
-	memcpy(fru.project_name.data, platform_info[PLAT_INFO_ID_PRJ_NAME], fru.project_name.len);
-	fru.firmware_version.len = strlen(platform_info[PLAT_INFO_ID_FW_VERSION]);
-	memcpy(fru.firmware_version.data, platform_info[PLAT_INFO_ID_FW_VERSION],
-	       fru.firmware_version.len);
-	fru.soc_info.len = strlen(platform_info[PLAT_INFO_ID_SOC_INFO]);
-	memcpy(fru.soc_info.data, platform_info[PLAT_INFO_ID_SOC_INFO], fru.soc_info.len);
 
 	ret = flash_update(fru_dev, PLAT_FLASH_PRJ_INFO_ADDR, &fru, sizeof(fru));
 	if (!ret) {
@@ -123,9 +137,42 @@ int store_project_info(void)
 	} else {
 		LOG_ERR("failed to update flash, ret %d", ret);
 	}
+#elif CONFIG_SYSTEM_INFO_FRU_DEVICE_EEPROM
+	struct flash_layout fru_tmp;
+
+	fru_dev = DEVICE_DT_GET(DT_ALIAS(fru_eeprom));
+	if (!device_is_ready(fru_dev)) {
+		LOG_ERR("%s is not ready", fru_dev->name);
+		return -ENODEV;
+	}
+
+	if (eeprom_get_size(fru_dev) < sizeof(fru)) {
+		LOG_ERR("fru eeprom capacity is insufficient");
+		return -ENOSPC;
+	}
+
+	ret = eeprom_read(fru_dev, PLAT_EEPROM_PRJ_INFO_ADDR, &fru_tmp, sizeof(fru_tmp));
+	if (ret) {
+		printk("failed to read fru eeprom, ret %d", ret);
+		return 0;
+	}
+
+	if (memcmp(&fru, &fru_tmp, sizeof(fru_tmp))) {
+		ret = eeprom_write(fru_dev, PLAT_EEPROM_PRJ_INFO_ADDR, &fru, sizeof(fru));
+		if (!ret) {
+			LOG_INF("store platform information at flash address 0x%x",
+				PLAT_EEPROM_PRJ_INFO_ADDR);
+		} else {
+			LOG_ERR("failed to update fru eeprom, ret %d", ret);
+		}
+	} else {
+		LOG_INF("platform information has already been set");
+		ret = -EALREADY;
+	}
+
 #else
 	LOG_WRN("fru storage disabled due to missing fru device");
-#endif /* DT_NODE_HAS_STATUS(DT_ALIAS(fru_flash), okay) */
+#endif /* CONFIG_SYSTEM_INFO_FRU_DEVICE_FLASH */
 
 	return ret;
 }

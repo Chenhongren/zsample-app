@@ -4,3 +4,19 @@
 module = SYSTEM_INFO
 module-str = system-info
 source "subsys/logging/Kconfig.template.log_config"
+
+choice
+	prompt "Select FRU storage device"
+	default SYSTEM_INFO_FRU_DEVICE_EEPROM if $(dt_alias_enabled,fru-eeprom)
+	default SYSTEM_INFO_FRU_DEVICE_FLASH if $(dt_alias_enabled,fru-flash)
+	default SYSTEM_INFO_FRU_DEVICE_NONE
+
+config SYSTEM_INFO_FRU_DEVICE_EEPROM
+	bool "Use eeprom device for FRU"
+
+config SYSTEM_INFO_FRU_DEVICE_FLASH
+	bool "Use flash device for FRU"
+
+config SYSTEM_INFO_FRU_DEVICE_NONE
+	bool "No FRU device"
+endchoice
