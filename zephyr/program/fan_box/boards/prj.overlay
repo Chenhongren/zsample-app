@@ -1,0 +1,17 @@
+
+/ {
+	aliases {
+		fru-eeprom = &eeprom;
+	};
+};
+
+&i2c2 {
+	eeprom: eeprom@50 {
+			compatible = "atmel,at24";
+			reg = <0x50>;
+			size = <DT_SIZE_K(32)>; /* 256K-bit */
+			pagesize = <8>;
+			address-width = <16>;
+			timeout = <5>;
+	};
+};

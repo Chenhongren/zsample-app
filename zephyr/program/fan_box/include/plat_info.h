@@ -9,4 +9,6 @@
 #define PROJECT_NAME     "FAN BOX"
 #define FIRMWARE_VERSION "0.1.0"
 
+#define PLAT_EEPROM_PRJ_INFO_ADDR 0x0
+
 #endif /* PLAT_INFO_H_ */
