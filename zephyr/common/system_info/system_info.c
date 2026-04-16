@@ -108,9 +108,10 @@ static int prepare_fru_data(struct flash_layout *fru)
 
 int store_project_info(void)
 {
-	int ret;
-	struct flash_layout fru;
 	const struct device *fru_dev;
+	off_t address;
+	struct flash_layout fru;
+	int ret;
 
 	update_soc_info();
 
@@ -127,14 +128,9 @@ int store_project_info(void)
 		return -ENODEV;
 	}
 
-	ret = flash_update(fru_dev, PLAT_FLASH_PRJ_INFO_ADDR, &fru, sizeof(fru));
-	if (!ret) {
-		LOG_INF("store platform information at flash address 0x%x",
-			PLAT_FLASH_PRJ_INFO_ADDR);
-	} else if (ret == -EALREADY) {
-		LOG_INF("platform information has already been set");
-		ret = 0;
-	} else {
+	address = PLAT_FLASH_PRJ_INFO_ADDR;
+	ret = flash_update(fru_dev, address, &fru, sizeof(fru));
+	if (ret && ret != -EALREADY) {
 		LOG_ERR("failed to update flash, ret %d", ret);
 	}
 #elif CONFIG_SYSTEM_INFO_FRU_DEVICE_EEPROM
@@ -146,34 +142,38 @@ int store_project_info(void)
 		return -ENODEV;
 	}
 
+	address = PLAT_EEPROM_PRJ_INFO_ADDR;
 	if (eeprom_get_size(fru_dev) < sizeof(fru)) {
 		LOG_ERR("fru eeprom capacity is insufficient");
 		return -ENOSPC;
 	}
 
-	ret = eeprom_read(fru_dev, PLAT_EEPROM_PRJ_INFO_ADDR, &fru_tmp, sizeof(fru_tmp));
+	ret = eeprom_read(fru_dev, address, &fru_tmp, sizeof(fru_tmp));
 	if (ret) {
-		printk("failed to read fru eeprom, ret %d", ret);
-		return 0;
+		LOG_ERR("failed to read fru eeprom, ret %d", ret);
+		return ret;
 	}
 
 	if (memcmp(&fru, &fru_tmp, sizeof(fru_tmp))) {
-		ret = eeprom_write(fru_dev, PLAT_EEPROM_PRJ_INFO_ADDR, &fru, sizeof(fru));
-		if (!ret) {
-			LOG_INF("store platform information at flash address 0x%x",
-				PLAT_EEPROM_PRJ_INFO_ADDR);
-		} else {
+		ret = eeprom_write(fru_dev, address, &fru, sizeof(fru));
+		if (ret) {
 			LOG_ERR("failed to update fru eeprom, ret %d", ret);
 		}
 	} else {
-		LOG_INF("platform information has already been set");
 		ret = -EALREADY;
 	}
 
 #else
 	LOG_WRN("fru storage disabled due to missing fru device");
+	ret = -ENOTSUP;
 #endif /* CONFIG_SYSTEM_INFO_FRU_DEVICE_FLASH */
 
+	if (!ret) {
+		LOG_INF("store platform information at eeprom address 0x%lx", address);
+	} else if (ret == -EALREADY) {
+		LOG_INF("platform information has already been set");
+		ret = 0;
+	}
 	return ret;
 }
 
